@@ -1,0 +1,192 @@
+#!/bin/bash
+
+date=`date '+%Y/%m/%d_%H:%M:%S'`
+source /root/network_test_variables
+pidof -x  -o $$  $0
+if [ $? -eq 0 ]
+then 
+    echo -e " WARNING: Process bonding_test.sh is already runnning on the node $host_info"
+    exit 2
+else 
+echo -e "INFO: Running the failover test"
+#gateway_details=$3
+#DNS_TEST=$1
+echo -e  "INFO: printing gateway_details :$gateway_details"
+#host_info=$2
+#bond_number=$4
+cat /dev/null>  /tmp/${host_info}_network_status
+cat /dev/null>  /tmp/${host_info}_network_status_lastrun
+echo -e "\nHOSTNAME: \t$host_info\t `date '+%Y/%m/%d_%H:%M:%S'`" >> /tmp/${host_info}_network_status
+echo "INFO: Running Failover Test for host $host_info"
+        nslookup $DNS_TEST &> /dev/null
+        if [ $? -eq 0 ]
+        then
+
+        echo -e "INFO:\t$host_info\t \tDNS_Reachable" >>/tmp/${host_info}_network_status
+
+        else
+        echo -e "FATAL:\t$host_info\t \tDNS_NOT_Reachable ">>/tmp/${host_info}_network_status
+
+        fi
+
+	NTP_STATUS=`sudo chronyc tracking | grep -i "Leap status" | awk -F ":" '{print "NTP_SYNC:" $2}'`
+	if [ "$NTP_STATUS" == "NTP_SYNC: Normal" ]
+		then
+		echo -e  "INFO:\t$NTP_STATUS" >> /tmp/${host_info}_network_status
+	else
+		echo -e "WARNING:\t$NTP_STATUS" >> /tmp/${host_info}_network_status
+	fi
+        
+	if [ -z "$bond_number" ]
+        then
+                echo -e "INFO: list of bonds to test for failover not provided. Checking if bond is present on the host"
+                bond_count=`ls -lrt /proc/net/bonding/ | grep -i bond |wc -l`
+                if [ $bond_count -gt 0 ]
+                then
+                echo -e "INFO: Getting list of bonds"
+
+                        bond_number=`ls -lrt /proc/net/bonding/ | awk '{print $9}'  | grep -i bond | tr "\n" ","`
+                        echo "INFO: list of bonds = $bond_number"
+                else
+                        echo "WARNING: No Bonds for failover test" >>/tmp/${host_info}_network_status
+                fi
+        else
+                echo "INFO: User has provided list of bonds as $bond_number"
+        fi
+
+        for bond_name in `echo -e "$bond_number" |tr "," "\n"`
+        do
+        interface_list=`ip a | grep -i " $bond_name "| awk '{print $2}' | awk -F ":" '{print $1}' | tr "\n" "\t"`
+        if [ -z "$interface_list" ]
+        then
+                echo "FATAL: no interfaces found for $bond_name check if the bondname is correct in the file"
+                exit 2
+        else
+        interface1=`echo $interface_list | awk '{print $1}'`
+        interface2=`echo $interface_list | awk '{print $2}'`
+        interface1_status=`ip link show $interface1 | head -1| awk '{print $11}'`
+        interface2_status=`ip link show $interface2 | head -1| awk '{print $11}'`
+	for interface in `echo -e "$interface_list"| tr " " "\t"`
+	do		
+		
+		echo "INFO: Setting up lldp flag for $interface"
+		ethtool --set-priv-flags $interface disable-fw-lldp on
+	done
+	
+	aggregator_count=`cat /proc/net/bonding/$bond_name | grep -i "Aggregator ID" |awk  '{print $1": "$3}'| uniq | wc -l`
+
+	interface_speed=`cat /proc/net/bonding/$bond_name  |grep -i  speed | uniq`
+		if [ $aggregator_count -eq 1 ]
+		then
+		aggregator_id=`cat /proc/net/bonding/$bond_name | grep -i "Aggregator ID" |awk  '{print $1": "$3}'| uniq`
+		echo -e "INFO: $bond_name\t$interface_list\t$interface_speed\t$aggregator_id">>/tmp/${host_info}_network_status
+		else 
+		echo -e "ERROR: $bond_name\t$interface_list\t$interface_speed\tAggregator_id_mismatch">>/tmp/${host_info}_network_status
+		fi
+        echo -e "INFO: interface list: $interface_list\n$bond_name interface1 name: $interface1\n$bond_name interface2 name: $interface2"
+        if [ "$interface1_status" == "$interface2_status" ]
+         then
+
+         echo "INFO: initiating $bond_name test by bringing down one interface at a time starting with $interface1"
+                ip link set dev $interface1 down
+                echo "INFO: Interface $interface1 in bond is brough down to test bond failover and connectivity"
+                for gateway in `echo -e "$gateway_details" | tr " " "\n"`
+                        do
+                                echo $gateway
+                                read gateway_ip interface_name<<<$(echo -e ${gateway} | awk -F "," '{print $1" "$2}')
+                                ip a | grep -i $interface_name
+                                if [ $? -eq 0 ]
+                                then
+                                echo "INFO: printing gateway_ip and interface name $gateway_ip $interface_name"
+                                ping -c60 -q -W1 -I $interface_name $gateway_ip
+                                        if [ $? -eq 0 ]
+                                        then echo  "INFO: system is able to reach the gateway using $interface_name"
+                                                echo -e "INFO: $gateway_ip\t$interface_name\t$interface2\t$bond_name\tReachable" >> /tmp/${host_info}_network_status
+                                        else    
+						echo "FATAL: system is unable to reach gateway using $interface_name"
+                                                echo -e "FATAL: $gateway_ip\t$interface_name\t$interface2\t$bond_name\tNot_Reachable" >> /tmp/${host_info}_network_status
+                                        fi
+                                else
+                                # echo "Interface $interface_name is not present on this node\nchecking if $gateway_ip is reachable otherwise" >> /tmp/${host_info}_network_status
+                                ping -c60 -q -W1  $gateway_ip
+                                        if [ $? -eq 0 ]
+                                        then
+					       	echo  "INFO: system is able to reach the gateway using $interface_name"
+                                                echo -e "INFO: $gateway_ip\t\t\t$interface2\t$bond_name\tReachable" >> /tmp/${host_info}_network_status
+                                        else   
+					       	echo "FATAL: system is unable to reach gateway using $interface_name"
+                                                echo -e "FATAL: $gateway_ip\t\t\t$interface2\t$bond_name\tNot_Reachable" >> /tmp/${host_info}_network_status
+                                        fi
+                                fi
+
+                done
+                echo -e "INFO: Bringing up $interface1\nSetting $interface2 down"
+                ip link set dev $interface1 up
+                if [ $? -eq 0 ]
+                then
+			sleep 5
+                        ip link set dev $interface2 down
+                        if [ $? -eq 0 ]
+                        then
+                                sleep 5
+                                for gateway in `echo $gateway_details | tr " " "\n"`
+                                do      
+					read gateway_ip interface_name<<<$(echo -e  ${gateway} | awk -F "," '{print $1" "$2}')
+                                ip a | grep -i $interface_name
+                                if [ $? -eq 0 ]
+                                then
+                                echo "$gateway_ip $interface_name"
+                                ping -c60 -q -W1 -I $interface_name $gateway_ip
+                                        if [ $? -eq 0 ]
+                                        then   
+					       	echo  "INFO: system is able to reach the gateway using $interface_name"
+                                                echo -e "INFO: $gateway_ip\t$interface_name\t$interface1\t$bond_name\tReachable" >>/tmp/${host_info}_network_status
+                                        else    
+						echo "FATAL: system is unable to reach gateway using interface"
+                                                echo -e "FATAL: $gateway_ip\t$interface_name\t$interface1\t$bond_name\tNot_Reachable" >>/tmp/${host_info}_network_status
+                                        fi
+                                else
+
+                                        # echo -e "Interface $interface_name is not present on this node,checking if $gateway_ip is reachable otherwise">>/tmp/${host_info}_network_status
+                                ping -c60 -q -W1 $gateway_ip
+                                        if [ $? -eq 0 ]
+                                        then 
+						echo  "INFO: system is able to reach the gateway using $interface_name"
+                                                echo -e "INFO: $gateway_ip\t\t\t$interface1\t$bond_name\tReachable" >> /tmp/${host_info}_network_status
+                                        else  
+					      	echo "FATAL: system is unable to reach gateway using $interface_name"
+                                                echo -e "FATAL: $gateway_ip\t\t\t$interface1\t$bond_name\tNot_Reachable" >> /tmp/${host_info}_network_status
+                                        fi
+                                fi
+
+                        done
+                else
+                        echo "FATAL: Failed to bring down $interface2 aborting"
+                        echo -e "FATAL: Partial_Abort_test\t$hostname\t$interface2 down" >>/tmp/${host_info}_network_status
+                fi
+                 ip link set dev $interface2 up
+                if [ $? -eq 0 ]
+                then
+                        echo -e "INFO: brought up $interface2"
+                else
+                        echo -e "FATAL: Failed to bring up $interface2 for $host_info" >>/tmp/${host_info}_network_status
+                fi
+        else
+                echo "FATAL: Failed to bring up $interface1 aborting"
+                echo -e  "FATAL: Partial_Abort_test\t$hostname\t$interface1\tdown" >>/tmp/${host_info}_network_status
+        fi
+
+                else
+                  echo -e  "FATAL: One of the interface is already down aborting bonding and gateway test on the $host_info "
+                 echo -e "FATAL: Abort NIC failover test for $host_info and $bond_name  \n  $interface1 \t $interface1_status  \t $bond_name \n  $interface2 \t $interface2_status \t $bond_name"  >>/tmp/${host_info}_network_status
+        fi
+
+        #mv /tmp/${host_info}_network_status /tmp/${host_info}_network_status_lastrun
+        fi
+        done
+	sleep 70
+        echo -e "\nnetworkctl lldp \n" >>/tmp/${host_info}_network_status
+	networkctl lldp >>/tmp/${host_info}_network_status
+        
+	mv /tmp/${host_info}_network_status /tmp/${host_info}_network_status_lastrun
+fi

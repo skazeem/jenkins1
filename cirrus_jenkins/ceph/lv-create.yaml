@@ -1,0 +1,65 @@
+- name: creates logical volumes for the bucket index or fs journals on a single device and prepares for use of osd_scenario=lvm.
+  become: true
+  hosts: sp-dev-storage5
+  vars:
+    logfile: |
+      Suggested cut and paste under "lvm_volumes:" in "group_vars/osds.yml" for configuring with osd_scenario=lvm
+      -----------------------------------------------------------------------------------------------------------
+      {% for hdd in hdd_devices %}
+        - data: {{ hdd_lv_prefix }}-{{ hdd.split('/')[-1] }}
+          data_vg: {{ hdd_vg_prefix }}-{{ hdd.split('/')[-1] }}
+          db: ceph-wal-db-{{ hdd.split('/')[-1] }}-{{ nvme_device_basename }}
+          db_vg: {{ nvme_vg_name }}
+          crush_device_class: "{{ crush_device_class }}"
+      {% endfor %}
+  tasks:
+  - name: include vars of lv_vars.yaml
+    include_vars:
+      file: lv-vars.yaml
+    failed_when: false
+  - name: fail if nvme_device is not undefined
+    fail:
+      msg: nvme_device has not been set by the user
+    when: nvme_device is undefined or nvme_device == 'dummy'
+  - name: install lvm2
+    package:
+      name: lvm2
+      state: present
+  - name: add nvme device as lvm pv
+    lvg:
+      force: true
+      pvs: '{{ nvme_device }}'
+      pesize: 4
+      state: present
+      vg: '{{ nvme_vg_name }}'
+  - name: create lvs for fs journals for the bucket index on the nvme device
+    lvol:
+      lv: ceph-wal-db-{{ item.split('/')[-1] }}-{{ nvme_device_basename }}
+      vg: '{{ nvme_vg_name }}'
+      size: '{{ wall_db_size }}'
+      pvs: '{{ nvme_device }}'
+    with_items:
+    - '{{ hdd_devices }}'
+  - name: create vgs for all hdd devices
+    lvg:
+      force: true
+      pvs: '{{ item }}'
+      pesize: 4
+      state: present
+      vg: '{{ hdd_vg_prefix }}-{{ item.split(''/'')[-1] }}'
+    with_items:
+    - '{{ hdd_devices }}'
+  - name: create lvs for the data portion on hdd devices
+    lvol:
+      lv: '{{ hdd_lv_prefix }}-{{ item.split(''/'')[-1] }}'
+      vg: '{{ hdd_vg_prefix }}-{{ item.split(''/'')[-1] }}'
+      size: '{{ hdd_lv_size }}'
+      pvs: '{{ item }}'
+    with_items:
+    - '{{ hdd_devices }}'
+  - name: write output for osds.yml to {{ logfile_path }}
+    become: false
+    copy:
+      content: '{{ logfile }}'
+      dest: '{{ logfile_path }}'
+    delegate_to: localhost

@@ -1,0 +1,34 @@
+---
+- name: Setup OVS bridges
+  hosts: neutron_openvswitch_agent
+  user: root
+
+  tasks:
+    - name: Installing required packages
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - openvswitch-switch
+
+    - name: Setup br-provider
+      openvswitch_bridge:
+        bridge: br-provider
+        state: present
+        fail_mode: secure
+      notify:
+        - Restart neutron-openvswitch-agent
+
+    - name: Add port to br-provider
+      openvswitch_port:
+        bridge: br-provider
+        port: vlan-provider
+        state: present
+      notify:
+        - Restart neutron-openvswitch-agent
+
+  handlers:
+    - name: Restart neutron-openvswitch-agent
+      service:
+        name: neutron-openvswitch-agent
+        state: restarted

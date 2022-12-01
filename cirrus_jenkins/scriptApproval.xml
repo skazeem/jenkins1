@@ -1,0 +1,71 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<scriptApproval plugin="script-security@1138.v8e727069a_025">
+  <approvedScriptHashes>
+    <string>017d0db438428731cd600b6ebda805065433520f</string>
+    <string>5c9efea2a1d55997a4e8601c9a93d3acf39abf37</string>
+    <string>65ab7588bb84caf3fb2dcf6f03b268b5759bd28b</string>
+  </approvedScriptHashes>
+  <approvedSignatures>
+    <string>method groovy.text.Template make java.util.Map</string>
+    <string>method groovy.text.TemplateEngine createTemplate java.lang.String</string>
+    <string>new groovy.text.StreamingTemplateEngine</string>
+    <string>staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods intersect java.util.List java.lang.Iterable</string>
+  </approvedSignatures>
+  <aclApprovedSignatures/>
+  <approvedClasspathEntries/>
+  <pendingScripts>
+    <pendingScript>
+      <context/>
+      <script>def command = [&apos;/bin/sh&apos;,  &apos;-c&apos;,  &apos;cat /var/lib/jenkins/global_pipeline_parameters/file | grep CEPHDeploymentNode | cut -d\&apos;=\&apos; -f2- &apos;]
+def proc = command.execute()
+proc.waitFor()              
+
+def output = proc.in.text
+def exitcode= proc.exitValue()
+def error = proc.err.text
+
+if (error) {
+    println &quot;Std Err: ${error}&quot;
+    println &quot;Process exit code: ${exitcode}&quot;
+    return exitcode
+}
+
+//println output.split()
+return output.tokenize()</script>
+      <language>groovy</language>
+    </pendingScript>
+    <pendingScript>
+      <context/>
+      <script></script>
+      <language>groovy</language>
+    </pendingScript>
+    <pendingScript>
+      <context/>
+      <script>def command = [&apos;/bin/sh&apos;,  &apos;-c&apos;,  &apos;cat /var/lib/jenkins/global_pipeline_parameters/master.properties | grep CEPHDeploymentNode | cut -d\&apos;=\&apos; -f2- &apos;]
+def proc = command.execute()
+proc.waitFor()              
+
+def output = proc.in.text
+def exitcode= proc.exitValue()
+def error = proc.err.text
+
+if (error) {
+    println &quot;Std Err: ${error}&quot;
+    println &quot;Process exit code: ${exitcode}&quot;
+    return exitcode
+}
+
+//println output.split()
+return output.tokenize()</script>
+      <language>groovy</language>
+    </pendingScript>
+  </pendingScripts>
+  <pendingSignatures>
+    <pendingSignature>
+      <context/>
+      <signature>method groovy.lang.GroovyObject getProperty java.lang.String</signature>
+      <dangerous>true</dangerous>
+    </pendingSignature>
+  </pendingSignatures>
+  <pendingClasspathEntries/>
+</scriptApproval>

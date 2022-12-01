@@ -1,0 +1,152 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Pre-requisuite:&#13;
+      1.  Successful completion of previous pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY &#13;
+      2. Netplan configuration YAML should be in place on the MAAS server ( /home/playbooks/netplan/netplan-apply.yml ) along with the roles, tasks and templates in /home/playbooks/netplan/ directory.&#13;
+      3. NTP Configuration YAML should be in place on the MAAS server ( /home/playbooks/chrony/setup-timezone.yml ) along with &#13;
+      4. Host inventory file should be present with list of hosts on which the configuration needs to be applied /home/playbooks/netplan/hosts&#13;
+      5.  Ansible installed on the maas server&#13;
+      Note: 1. The string provided for password variable should not be empty&#13;
+      6. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.)&#13;
+      7. You can use the server list  provided in the console output of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY  to pass to the server list variable. If no list of servers is provided by user the pipeline will automatically get the list of nodes on which the OS was deployed by most recent run of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY&#13;
+  &#13;
+&#13;
+This Pipleline  will perform below task:&#13;
+1. Configure ssh to the root user on the nodes provided in server list&#13;
+2. Configure and Apply netplan configuration as predefined in the the netplan yaml file&#13;
+3. Configure,apply and then sync chronyc service with the NTP server and set the timezone for node&#13;
+</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_server_ip</name>
+          <description>Enter the IP address of the server on which MAAS application service is installed and running</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_server_ip</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>username</name>
+          <description>Enter the username to create as local used once the os is deployed on nodes, this user will have sudo access enabled</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>username</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.PasswordParameterDefinition>
+          <name>password</name>
+          <description>Enter the password for the username created after deploying node</description>
+        </hudson.model.PasswordParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>netplan_file</name>
+          <description>Enter the Ansible playbook  filename for netplan with complete path on the maas server (ex:/home/playbooks/netplan/netplan-apply.yml) which will be used to deploy Netplan config on the nodes</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>netplan_file</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>host_inventory</name>
+          <description>Enter the Ansible host inventory  filename with complete path on the maas server (ex:/home/playbooks/netplan/hosts) which will be used to get the list of hosts on which ntp and netplan configurations will be deployed</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>host_inventory</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>server_list</name>
+          <description>You can use the server list  provided in the console output of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY  to pass to the server list variable. If no list of servers is provided by user the pipeline will automatically get the list of nodes on which the OS was deployed by most recent run of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY  the list will consist of new line for each host entry in format hostname,status,system_id  Ex:hyd-mg-compute1,Deployed,krsmdq </description>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsPrivateKey = '/var/lib/jenkins/.ssh/id_rsa'
+def maas_server_admin = 'root'
+def ntp_config = '/home/playbooks/chrony/setup-timezone.yml'
+import groovy.text.*
+node {
+  properties(
+    [
+        parameters(
+            [
+        //        string(description: 'Please enter the IP address of the host maas server application is deployed', name: 'maas_server_ip'),
+        //    text(description: 'In Each line Enter the server information to be onboarded in the format below hostname,domain,mac_address,power_admin,power_password,ipmi_ip_address', name: 'server_list', defaultValue: 'sp-dev-compute1,dev,48:df:37:04:41:37,hpadmin,hpinvent,10.246.182.135\nsp-dev-compute2,dev,48:df:37:04:43:69,hpadmin,hpinvent,10.246.182.136\nsp-dev-compute3,dev,48:df:37:04:40:1b,hpadmin,hpinvent,10.246.182.137'),
+        //    text(description: 'In Each line Enter the gateway of interface information in the forrmat below gateway_ip_address,interface_name', name: 'gateway_details', defaultValue: '10.103.155.1,br-mgmt\n10.103.156.1,br-storage\n10.103.154.1,br-tunnel\n10.103.157.1,storage-ext\n10.103.156.1,storage-int'),
+        //    string(description: 'Enter the maas application admin name for the machines', name: 'maas_admin', defaultValue: 'maas'),
+        //    string(description: 'Enter the default pool name for the machines to be used in MAAS', name: 'pool', defaultValue: 'dev'),
+        //    choice(description: 'Enter the OS name to be used to deploy the server bionic=ubuntu 18.04 and focal=ubuntu 20.04', name: 'os_codename', choices: ['focal','bionic']),
+        //    string(description: 'Enter the OS name to be used to deploy the server', name: 'os_name', defaultValue: 'ubuntu'),
+        //    string(description: 'Enter the OS username to be used to ssh to  the MAAS server', name: 'maas_server_admin', defaultValue: 'root'),
+        //    string(description: 'Enter the OS username to be added on the deployed node', name: 'username', defaultValue: 'nicroot'),
+        //    string(description: 'Enter the Ansible playbook  filename for netplan with complete path on the maas server (ex:/home/playbooks/netplan/netplan-apply.yml)  ', name: 'netplan_file', defaultValue: '/home/playbooks/netplan/netplan-apply.yml'),
+        //    string(description: 'Enter the Ansible playbook  filename for ntp configuration with complete path on the maas server (ex:/home/playbooks/chrony/setup-timezone.yml)  ', name: 'ntp_config', defaultValue: '/home/playbooks/chrony/setup-timezone.yml'),
+        //    string(description: 'Enter the Ansible host inventory  filename with complete path on the maas server (ex:/home/playbooks/netplan/hosts)  ', name: 'host_inventory', defaultValue: '/home/playbooks/netplan/hosts'),
+        //    text(description: 'In Each line Enter the server information on which Netplan config needs to be deployed "hostname,status,system_id"', name: 'server_list', defaultValue: ''),
+        //   string(description: 'Enter the bond name for which bond failover tests will be performed  ', name: 'bond_name', defaultValue: 'bond0')
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'maas_server_ip', description: 'Enter the IP address of the server on which MAAS application service is installed and running', multiSelectDelimiter: ' ', name: 'maas_server_ip', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+         //     extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'maas_admin', description: 'Enter the admin user name  used for  MAAS application UI/CLI login', multiSelectDelimiter: ' ', name: 'maas_admin', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'username', description: 'Enter the username to create as local used once the os is deployed on nodes, this user will have sudo access enabled', multiSelectDelimiter: ' ', name: 'username', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              password(description: 'Enter the password for the username created after deploying node', name: 'password'),
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'netplan_file', description: 'Enter the Ansible playbook  filename for netplan with complete path on the maas server (ex:/home/playbooks/netplan/netplan-apply.yml) which will be used to deploy Netplan config on the nodes', multiSelectDelimiter: ' ', name: 'netplan_file', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+//              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'ntp_config', description: 'Enter the Ansible playbook  filename for ntp services installation configuration with complete path on the maas server  (ex:/home/playbooks/chrony/setup-timezone.yml) which will be used to deploy ntp services and config on the nodes', multiSelectDelimiter: ' ', name: 'ntp_config', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'host_inventory', description: 'Enter the Ansible host inventory  filename with complete path on the maas server (ex:/home/playbooks/netplan/hosts) which will be used to get the list of hosts on which ntp and netplan configurations will be deployed', multiSelectDelimiter: ' ', name: 'host_inventory', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              text(description: 'You can use the server list  provided in the console output of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY  to pass to the server list variable. If no list of servers is provided by user the pipeline will automatically get the list of nodes on which the OS was deployed by most recent run of pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY  the list will consist of new line for each host entry in format hostname,status,system_id  Ex:hyd-mg-compute1,Deployed,krsmdq ', name: 'server_list', defaultValue: '')
+           
+             ]
+
+            )
+    ]
+    )
+       stage('Verify the server list') {
+        
+      sh """
+      ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/server_list_post_os_installation.sh "'$server_list'"
+       """
+        input message: '''Pre-requisuite:
+      1.  Successful completion of previous pipeline 1.2_MAAS_AUTOMATION_BAREMETAL_OS_DEPLOY 
+      2. Netplan configuration YAML should be in place on the MAAS server ( /home/playbooks/netplan/netplan-apply.yml ) along with the roles, tasks and templates( for openstack,storage-controller,osd) in /home/playbooks/netplan/ directory.
+      3. NTP Configuration YAML should be in place on the MAAS server ( /home/playbooks/chrony/setup-timezone.yml )
+      4. Host inventory file should be present with list of hosts on which the configuration needs to be applied /home/playbooks/netplan/hosts
+      5.  Ansible installed on the maas server
+      Note: 1. Parameter “Password” should not be left blank/null/empty.
+      6. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.)
+      '''
+    }
+    stage('POST OS DEPLOYMENT CONFIGURATION') {
+     
+   sh """
+    set +x
+    ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/maas_post_os_deployment_config.sh "$username" "$password" "'$server_list'" "$netplan_file"  "$host_inventory" "$ntp_config"
+    """
+  }
+
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

@@ -1,0 +1,568 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Prerequisite:&#13;
+       1. Pipeline "1.3MAAS_NETPLAN_POST_OS_DEPLOY_CHECK " is already executed for the servers being used for ceph.&#13;
+       2. Master file should exists. " /var/lib/jenkins/global_pipeline_parameters/master.properties having populated default Ceph values."(This will be on git once we have access to git from Jenkins box.)&#13;
+&#13;
+Below tasks it will perform:&#13;
+       1. Prepare the inventory file&#13;
+       2. Fetching of available disk on servers for ceph installation.&#13;
+       3. Generation lv-vars and lv-create.yml files.&#13;
+       4. Prepare the inventory file.&#13;
+       5. Create ceph-ansible yamls.&#13;
+       6. Move all yamls and inventory to deployment node&#13;
+       7. Pre-check of node reach-ability for Ansible executions&#13;
+       8. lv creation execution&#13;
+       9. Ceph installation execution.&#13;
+       10. Ceph dashboard enable and user creation.&#13;
+               a.Dashboard can be accessed using https:&lt;ip of MGR node&gt;:8443 \n &#13;
+               b. Login: 1. U: administrator Pass: admin@1234     &#13;
+                              2. U: ceph_readonly Pass: admin@1234&#13;
+      11. Pool creation.(for glance,volumes and vms)&#13;
+      12. Post installation status of OSDs, MONs, MGRs. &#13;
+&#13;
+      </description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>CEPHDeploymentNode</name>
+          <description>This variable expects hostname or IP of the deployment node. This the node where ansible is installed for Ceph deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>CEPHDeploymentNode</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>WipeDevices</name>
+          <description>If this is set to true, all the VGs and LVs created other than root VG will be cleaned for fresh execution of lv-create</description>
+          <choices>
+            <string>false</string>
+            <string>true</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>CephVersion</name>
+          <description>Version of Ceph, This pipe was E2E tested for Octopus, but likely to work on other versions as well</description>
+          <choices>
+            <string>octopus</string>
+            <string>nautilus</string>
+            <string>pacific</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ProxyUrl</name>
+          <description>Please enter the Proxy URL to access internet repository</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ProxyUrl</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>MONNetwork</name>
+          <description> (Storage External)The subnet of the ceph public network Use when the IP addresses of the nodes are unknown, but the subnet is known</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>MONNetwork</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>PublicNetwork</name>
+          <description>(Storage External)The IP address and netmask of the Ceph public network, or the corresponding IPv6 address if using IPv6 cluster_network</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>PublicNetwork</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ClusterNetwork</name>
+          <description>(Storage Internal)The network through which client will connect to access storage</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ClusterNetwork</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>MONS</name>
+          <description>Enter the Node names which will be used as MON 
+ Example:- hyd-mg-s-controller[1:3]</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>MONS</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>MGRS</name>
+          <description>Enter the Node names which will be used as Managers 
+ Example:- hyd-mg-s-controller[1:3]</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>MGRS</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>OSDS</name>
+          <description>Enter the Node names which will be used as OSDs
+ Example:- hyd-mg-s-osd[1:3]</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>OSDS</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>Blockdb_size</name>
+          <description>Blockdb size can be calculated as (size of one nvme Disk in MB / Half of total Disk count used for OSD).We need to roundup the size slightly below the calculation
+ For  Ex: We have two nvme device of 480G each, and total 20 SSD/HDD,then   blockdb size = 480*1024/10 = 49152. roundoff  we can take ~ 45000</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>Blockdb_size</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>PoolNames</name>
+          <description> Give the pools_name colon pg_num colon replicated_size (i.e poolname:pgs:replicated_size) to be created. Multiple values can be given in comma separated form for e.g:- prod-images:pgs:replica_size,prod-vms:pgs:replica_size,prod-volumes:pgs:replica_size. Sequencing is important first poolname should be glance pool only for which glance permission will be given on client ID. then  volumes and vms pool for which cinder permission will be assigned 
+ If PG count is given as zero it will enable the autoscalling on that pool but if any value more than 0 is defined autoscalling will be disabled and pool will be created with specific pg count. 
+ PG calculation can be done using link:- https://old.ceph.com/pgcalc/ 
+ Example:- prod-images:0:3,prod-vms:0:3,prod-volumes:0:3</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>PoolNames</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>Commands</name>
+          <description>Input additional commands if needed seprated by comma</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>Commands</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>import groovy.text.*
+def JenkinsHome = '/var/lib/jenkins'
+def JenkinsCephHOME = "$JenkinsHome/ceph"
+def JnekinsPrivateKey = '/var/lib/jenkins/id_rsa'
+def UpdateYaml = 'true'
+def EnableDashboard = 'true'
+def GenerateFsid = 'true'
+def CephRepoClone = 'true'
+def String disks = ''
+
+node {
+properties([parameters([extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'CEPHDeploymentNode', description: 'This variable expects hostname or IP of the deployment node. This the node where ansible is installed for Ceph deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.', multiSelectDelimiter: ',', name: 'CEPHDeploymentNode', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+choice(name: 'WipeDevices', choices: ['false', 'true'] ,description: 'If this is set to true, all the VGs and LVs created other than root VG will be cleaned for fresh execution of lv-create'),
+
+choice(description: 'Version of Ceph, This pipe was E2E tested for Octopus, but likely to work on other versions as well', name: 'CephVersion', choices: ['octopus','nautilus','pacific']),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'ProxyUrl', description: 'Please enter the Proxy URL to access internet repository', multiSelectDelimiter: ',', name: 'ProxyUrl', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'MONNetwork', description: ' (Storage External)The subnet of the ceph public network Use when the IP addresses of the nodes are unknown, but the subnet is known', multiSelectDelimiter: ',', name: 'MONNetwork', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'PublicNetwork', description: '(Storage External)The IP address and netmask of the Ceph public network, or the corresponding IPv6 address if using IPv6 cluster_network', multiSelectDelimiter: ',', name: 'PublicNetwork', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'ClusterNetwork', description: '(Storage Internal)The network through which client will connect to access storage', multiSelectDelimiter: ',', name: 'ClusterNetwork', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'MONS', description: 'Enter the Node names which will be used as MON \n Example:- hyd-mg-s-controller[1:3]', multiSelectDelimiter: ',', name: 'MONS', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'MGRS', description: 'Enter the Node names which will be used as Managers \n Example:- hyd-mg-s-controller[1:3]', multiSelectDelimiter: ',', name: 'MGRS', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'OSDS', description: 'Enter the Node names which will be used as OSDs\n Example:- hyd-mg-s-osd[1:3]', multiSelectDelimiter: ',', name: 'OSDS', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'Blockdb_size', description: 'Blockdb size can be calculated as (size of one nvme Disk in MB / Half of total Disk count used for OSD).We need to roundup the size slightly below the calculation\n For  Ex: We have two nvme device of 480G each, and total 20 SSD/HDD,then   blockdb size = 480*1024/10 = 49152. roundoff  we can take ~ 45000', multiSelectDelimiter: ',', name: 'Blockdb_size', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 5),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'PoolNames', description: ' Give the pools_name colon pg_num colon replicated_size (i.e poolname:pgs:replicated_size) to be created. Multiple values can be given in comma separated form for e.g:- prod-images:pgs:replica_size,prod-vms:pgs:replica_size,prod-volumes:pgs:replica_size. Sequencing is important first poolname should be glance pool only for which glance permission will be given on client ID. then  volumes and vms pool for which cinder permission will be assigned \n If PG count is given as zero it will enable the autoscalling on that pool but if any value more than 0 is defined autoscalling will be disabled and pool will be created with specific pg count. \n PG calculation can be done using link:- https://old.ceph.com/pgcalc/ \n Example:- prod-images:0:3,prod-vms:0:3,prod-volumes:0:3', multiSelectDelimiter: ',', name: 'PoolNames', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+
+extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'Commands', description: 'Input additional commands if needed seprated by comma', multiSelectDelimiter: ',', name: 'Commands', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 5),
+])])
+
+stage('Clone repo') {
+     //input message: 'stop'
+   sh " mkdir -p  $JenkinsCephHOME/${BUILD_NUMBER}/" 
+    //load '/var/lib/jenkins/global_pipeline_parameters/master.properties'
+    if ( CephRepoClone == "true") {
+
+
+    if ( CephVersion == "octopus") {
+    sh " sed 's,version,origin/stable-5.0,g' $JenkinsCephHOME/deployment.sh &gt; $JenkinsCephHOME/$BUILD_NUMBER/deployment.sh "
+    }
+
+    if ( CephVersion == "nautilus") { 
+    sh " sed 's,version,origin/stable-4.0,g' $JenkinsCephHOME/deployment.sh &gt; $JenkinsCephHOME/$BUILD_NUMBER/deployment.sh "
+    }
+    if ( CephVersion == "pacific") { 
+    sh " sed 's,version,origin/stable-6.0,g' $JenkinsCephHOME/deployment.sh &gt; $JenkinsCephHOME/$BUILD_NUMBER/deployment.sh "
+    }
+    
+    sh """
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "grep http_proxy /etc/environment ||  echo http_proxy=$ProxyUrl &gt;&gt;/etc/environment; grep https_proxy /etc/environment ||  echo https_proxy=$ProxyUrl &gt;&gt; /etc/environment"
+       scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no $JenkinsCephHOME/$BUILD_NUMBER/deployment.sh root@$CEPHDeploymentNode:/tmp/deployment.sh
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode 'chmod +x /tmp/deployment.sh;/tmp/deployment.sh'
+    """
+    }
+    else {
+        println "Not cloning the repository as CephRepoClone is passed as false "
+    }}
+
+stage('Create inventory'){
+        def String Inventory
+    
+    if ( UpdateYaml == "true" ) {
+
+    //def Inventory_mons="hyd-mg-s-controller[1:3]"
+    //def Inventory_mgrs="hyd-mg-s-controller[1:3]"
+    //def Inventory_osds="hyd-mg-s-osds[1:3]"
+    def Inventory_osd_type1 =""
+    def Inventory_osd_type2 =""
+    if ( Inventory_osd_type1== ""  &amp;&amp; Inventory_osd_type2=="" ) {
+
+        def text = '''
+[mons]
+&lt;% out.print mons %&gt; ansible_python_interpreter=/usr/bin/python3
+
+[mgrs]
+&lt;% out.print mgrs %&gt; ansible_python_interpreter=/usr/bin/python3 
+
+[osds]
+&lt;% out.print osds %&gt; ansible_python_interpreter=/usr/bin/python3'''
+    
+        def template = new groovy.text.StreamingTemplateEngine().createTemplate(text)
+        def binding = [mons : "$MONS", mgrs  : "$MGRS", osds: "$OSDS",]
+        Inventory = template.make(binding) 
+}
+
+    else {
+
+        def text = '''
+[mons]
+&lt;% out.print mons %&gt; ansible_python_interpreter=/usr/bin/python3
+
+[mgrs]
+&lt;% out.print mgrs %&gt; ansible_python_interpreter=/usr/bin/python3 
+
+[osds]
+&lt;% out.print osds %&gt; ansible_python_interpreter=/usr/bin/python3 
+
+[osds_type1]
+&lt;% out.print osds_1 %&gt; ansible_python_interpreter=/usr/bin/python3
+
+[osds_type2]
+&lt;% out.print osds_2 %&gt; ansible_python_interpreter=/usr/bin/python3'''
+
+
+        def template = new groovy.text.StreamingTemplateEngine().createTemplate(text)
+  
+        def binding = [mons : "$Inventory_mons", mgrs  : "$Inventory_mgrs", osds: "$Inventory_osds", osds_1: "$Inventory_osds_1", osds_2: "$Inventory_osds_2"]
+        Inventory = template.make(binding)
+        
+        
+}
+    //println "$Inventory"
+    sh """
+    echo '$Inventory' &gt; '$JenkinsCephHOME/$BUILD_NUMBER/hosts'
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no $JenkinsCephHOME/$BUILD_NUMBER/hosts root@$CEPHDeploymentNode:/etc/ansible/hosts
+    """
+    
+   // input message: 'Please review the above output of VGs which would be deleted, Proceed if okay else Abort'
+
+    }
+    else { 
+    println "Not updating inventory as UpdateYaml is set to false"
+    }
+}
+
+
+stage ('Pre-check') {
+    sh """
+
+
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/setup-timezone.yml root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/chrony.conf root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "export ANSIBLE_HOST_KEY_CHECKING=False; ansible all -m ping"
+    
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "cd /usr/share/ceph-ansible/infrastructure-playbooks/ &amp;&amp; ansible-playbook setup-timezone.yml"
+
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds -m shell -a 'lsblk'"
+    
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds -m shell -a 'hostname &amp;&amp; ip a &amp;&amp; ip r'"
+    """
+
+    if ( WipeDevices == "true") {
+    sh """
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds -m shell -a 'if pgrep osd; then pkill osd; fi'"
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode ansible osds -m shell -a 'vgs  |grep -v vgroot |grep -v VG |cut -d" " -f3'
+    """
+    
+
+    //input message: 'Please review the above output of VGs which would be deleted, Proceed if okay else Abort'
+
+    sh """
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds -m shell -a  'vgs |grep  ceph &amp;&amp; { vgs --noheadings  --separator : |cut -d: -f1 |grep -v root |xargs vgremove -y; } ; if [ \$? -ne 0 ];then exit 0 ; fi' "
+    """
+    }}
+
+stage('Update variables'){
+    
+    
+    sh"""
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/fetch_disk.sh root@$CEPHDeploymentNode:/root/
+    
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds[1] -m copy -a 'src=/root/fetch_disk.sh dest=/root/fetch_disk.sh mode=744' "
+
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ansible osds[1] -m shell -a /root/fetch_disk.sh | tail -1 "
+    """
+
+    def result = sh ( script: "ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode ansible osds[1] -m shell -a /root/fetch_disk.sh | tail -1 " , returnStdout: true )
+    //println "$result"
+    
+    echo("Disk Being used as journal and OSD: ${result}")
+    //input message: 'Please review the above output of disk being used as journal and OSD disks, Proceed if okay else Abort and populate the correct values of disks in master.properties'
+    
+    disks =  'osds,'+ "$Blockdb_size,"+ "$result"
+    //println "$disks"
+    
+    
+    
+    vardata = readYaml file: "$JenkinsCephHOME/lv-vars.yaml"
+    playdata = readYaml file: "$JenkinsCephHOME/lv-create.yaml"
+    // modify
+   
+    String[] str;
+      line = disks.split('\n');
+      
+    for( String values : line ){
+       items = values.split(',')
+       all_osds_disks = items[4..-1]
+       size = all_osds_disks.size().intdiv(2)
+       group1_disk = all_osds_disks[0.. size]
+       group2_disk = all_osds_disks[size+1..-1]
+
+       for(int i in [1,2]) { 
+       file_name = items[0]+'_'+"$i"
+       vardata.logfile_path = './'+"$file_name"+'.log'
+       vardata.wall_db_size = items[1]
+       vardata.nvme_device = items[1+i]
+       playdata[0].hosts = items[0]
+       playdata[0].tasks[0].include_vars.file = "lv-vars-${file_name}.yaml"
+       if ( i == 1) {
+         disk_group = group1_disk
+       }
+       if ( i == 2) {
+        disk_group = group2_disk
+       }
+       vardata.hdd_devices = []
+       hdd_devices = []
+       disk_group.eachWithIndex { item, index -&gt;
+       vardata.hdd_devices[index] = disk_group[index]
+       hdd_devices[index] = disk_group[index]
+       }
+    writeYaml file: "$JenkinsCephHOME/${BUILD_NUMBER}/lv-vars-${file_name}.yaml", data: vardata, overwrite: true
+    writeYaml file: "$JenkinsCephHOME/${BUILD_NUMBER}/lv-create-${file_name}.yaml", data: playdata, overwrite: true
+   }
+   }
+   
+    allvar = readYaml file: "$JenkinsCephHOME/all.yaml"
+    allvar.generate_fsid = "$GenerateFsid"
+    //allvar.fsid = "$Fsid"
+    allvar.monitor_address_block = "$MONNetwork"
+    allvar.public_network = "$PublicNetwork"
+    allvar.cluster_network = "$ClusterNetwork"
+    //allvar.monitor_interface = "$MONInterface"
+    
+    writeYaml file: "$JenkinsCephHOME/${BUILD_NUMBER}/all.yaml", data: allvar, overwrite: true}
+
+
+
+
+stage ('copy updated files'){
+    if ( UpdateYaml == "true" ) {
+    sh """
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/${BUILD_NUMBER}/lv-vars-*.yaml root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/vars/
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/${BUILD_NUMBER}/lv-create-*.yaml root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/
+    scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no  $JenkinsCephHOME/${BUILD_NUMBER}/all.yaml root@$CEPHDeploymentNode:/etc/ansible/group_vars/all.yml
+    """
+    }
+    else { 
+    println "Not updating Yamls as UpdateYaml is set to false"
+    }}
+
+
+
+stage('Execute lvcreate'){
+        String[] str;
+      line = disks.split('\n');
+      
+    for( String values : line ){
+       items = values.split(',')
+
+       for(int i in [1,2]) { 
+       file_name = items[0]+'_'+"$i"
+       sh """
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "cd /usr/share/ceph-ansible/infrastructure-playbooks/;echo "Executing lvcreate for Hostgroup $file_name" ;ansible-playbook lv-create-${file_name}.yaml"
+       """
+       }
+       }}
+
+stage('Create lv files perhost'){
+    
+    String[] str;
+      line = disks.split('\n');
+    for( String values : line ){
+       items = values.split(',')
+       host_group =  items[0]
+       logfile1 = items[0]+'_'+'1'+'.log'
+       logfile2 = items[0]+'_'+'2'+'.log'
+
+       sh """
+       mkdir -p  $JenkinsCephHOME/${BUILD_NUMBER}/host_vars
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode  "ansible $host_group --list-hosts   | tail -n +2 |sed 's/^ *//g'" &gt; $JenkinsCephHOME/$BUILD_NUMBER/"$host_group"_hosts
+       
+       scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no -pr root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/$logfile1 $JenkinsCephHOME/${BUILD_NUMBER}/
+
+       scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no -pr root@$CEPHDeploymentNode:/usr/share/ceph-ansible/infrastructure-playbooks/$logfile2 $JenkinsCephHOME/${BUILD_NUMBER}/
+       
+       for value in `cat $JenkinsCephHOME/$BUILD_NUMBER/"$host_group"_hosts`;
+            do 
+            cp $JenkinsCephHOME/osds.yaml  $JenkinsCephHOME/$BUILD_NUMBER/host_vars/\$value
+            cat $JenkinsCephHOME/${BUILD_NUMBER}/$logfile1 |tail +3 &gt;&gt; $JenkinsCephHOME/$BUILD_NUMBER/host_vars/\$value
+            cat $JenkinsCephHOME/${BUILD_NUMBER}/$logfile2 |tail +3 &gt;&gt; $JenkinsCephHOME/$BUILD_NUMBER/host_vars/\$value
+            done
+
+       """
+    
+    }
+       sh """
+       scp -i $JnekinsPrivateKey -o StrictHostKeyChecking=no -pr $JenkinsCephHOME/$BUILD_NUMBER/host_vars root@$CEPHDeploymentNode:/etc/ansible/
+       """}
+    
+stage('Execute ') {
+    sh """
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "cd /usr/share/ceph-ansible/; cp site.yml.sample site.yml; ansible-playbook site.yml"
+    """ }
+
+stage('Create Pool') {
+    PoolName = PoolNames.split(',')
+    for (def name  in PoolName ){
+       item = name.split(':')
+       pool = item[0]
+       pgs = item[1] 
+       size = item[2] 
+       if (pgs == 0 ) {
+       sh """
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph osd pool create $pool &amp;&amp; ceph osd pool set $pool size $size"
+       """
+       }
+       else {
+       sh """
+       ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph osd pool create $pool $pgs &amp;&amp; ceph osd pool set $pool pg_autoscale_mode off &amp;&amp; ceph osd pool set $pool size $size &amp;&amp; ceph osd pool application enable $pool rbd"
+       """ 
+       }
+    }}
+
+stage('Create Keys') {
+    PoolName = PoolNames.split(',')
+     glancepool = PoolName[0].split(":")[0]
+     vmspool =  PoolName[1].split(":")[0]
+     volumes = PoolName[2].split(":")[0]
+
+
+    sh """
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph auth get-or-create client.cinder mon 'allow r' osd 'allow class-read object_prefix rbd_children, allow rwx pool=$volumes, allow rwx pool=$vmspool, allow rx pool=$glancepool'"
+   
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph auth get-or-create client.glance mon 'allow r' osd 'allow class-read object_prefix rbd_children, allow rwx pool=$glancepool'" 
+
+    """
+    
+}
+
+stage('Enable Dashboard') {
+    if ( EnableDashboard == "true") {
+        sh """
+        ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "echo 'admin@1234' &gt; password "
+        ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph mgr module enable dashboard &amp;&amp; ceph dashboard create-self-signed-cert &amp;&amp; ceph dashboard ac-user-create --enabled --force-password --pwd_update_required administrator -i password administrator &amp;&amp; ceph dashboard ac-user-create --enabled --force-password ceph_readonly -i password read-only"
+        """
+
+    }
+    else {
+        println "Not enabling ceph Dashboard as it was selected false"
+    }
+    
+}
+stage('Running additional commands') {
+if ( Commands != "" ) {
+    
+ranges = Commands.split(',');
+
+           ranges.eachWithIndex { item, index -&gt;
+           def command = item
+           sh """
+            $command
+           """
+           }  
+
+}
+else {
+    println "No commands provided"
+}
+}
+
+stage('Post Check'){
+
+    sh """
+    
+    ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$CEPHDeploymentNode "ceph config set global mon_warn_pg_not_scrubbed_ratio 0 &amp;&amp; ceph config set global mon_warn_pg_not_deep_scrubbed_ratio 0 &amp;&amp; ceph osd tree &amp;&amp; ceph health detail &amp;&amp; ceph -s"
+    
+    echo "Ceph Dashboard is accessiabled on https://10.103.157.32:8443"
+    echo "Login1 with Admin role #### User : administrator  and Password: admin@1234"
+    echo "Login2 with Readonly role ####  User: ceph_readonly and Password: admin@1234"
+    """ 
+    
+}
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

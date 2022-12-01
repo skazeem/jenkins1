@@ -1,0 +1,181 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>elow are the pre-requisuite to run this pipeline.&#13;
+&#13;
+1. Access to Ubuntu repositories to download packages and sync the images&#13;
+2. ssh access with sudo on the host where we will be deploying the MAAS application&#13;
+3. Subnet identified for MAAS PXE boot network&#13;
+4. MAAS server should have "jq" ( jquery installed on the system)&#13;
+&#13;
+This Pipeline will perform following Tasks&#13;
+&#13;
+1. Install MAAS Pacakge as per user selected version&#13;
+2. Configure the MAAS server by&#13;
+   a. setting up NTP server&#13;
+   b. setting up DNS server&#13;
+   c. setting up PXE subnet's DHCP range&#13;
+   d. setup user name and password for MAAS UI / CLI  as provided in the input&#13;
+   e. Create ssh key for the user used to ssh into the MAAS host which will be later copied into the nodes deployed through maas as part of OS deployment process to access the node&#13;
+</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>maas_node_ip</name>
+          <description>Please enter the PXE subnet IP address of the host on where MAAS service will be installed</description>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>maas_version</name>
+          <description>maas version</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>2.8</string>
+              <string>2.9</string>
+              <string>3.0</string>
+              <string>3.1</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>maas_admin_name</name>
+          <description>Enter the maas server admin name</description>
+          <defaultValue>admin</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>maas_admin_email</name>
+          <description>Enter the maas server admin email</description>
+          <defaultValue>admin@xyz.com</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.PasswordParameterDefinition>
+          <name>maas_admin_password</name>
+          <description>Enter the password for "maas_admin_name" which will be used to login into MAAS UI. **Note: the Password should be alphanumeric with minimum 8 characters</description>
+          <defaultValue>{AQAAABAAAAAQJ6D388y5wT1jqapnWTsO4TZ+uhMmdg8jlx86mjHxdjg=}</defaultValue>
+        </hudson.model.PasswordParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>ntp_server</name>
+          <description>Enter the ntp server hostname or Ip address</description>
+          <defaultValue>samay1.nic.in</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>http_proxy</name>
+          <description>Enter the http proxy server hostname or Ip address</description>
+          <defaultValue>http://10.246.180.234:3128</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>dns_server</name>
+          <description>Enter the dns server ip details to be used by MAAS</description>
+          <defaultValue>1.10.10.10</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>maas_dhcp_subnet</name>
+          <description>Add the PXE subnet used for the MAAS DHCP server in format ex: 10.246.183.0/24  to enable dhcp PXE boot</description>
+          <defaultValue>10.246.183.0/24</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>dhcp_range_start_ip</name>
+          <description>Add Start IP address for  PXE subnet DHCP pool range </description>
+          <defaultValue>10.246.183.100</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>dhcp_range_end_ip</name>
+          <description>Add End IP address for PXE subnet DHCP pool range </description>
+          <defaultValue>10.246.183.200</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>maas_server_username</name>
+          <description>Enter the username with root access used to ssh into the host running MAAS Server, ** Note : an ssh key will be generated for this user if not already created which will be added in the nodes post os installtion through this maas server</description>
+          <defaultValue>root</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>create_passwordless_ssh_key</name>
+          <description>If selected as "Yes" this will create a passwordless ssh key for the user provided in "maas_server_username" users home path i.e. ~/.ssh/If this option is selected as "No", it will be assumed that the password less key is already present in users home path and will use it while adding on the nodes during deployment process</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>Yes</string>
+              <string>No</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>os_list</name>
+          <description>Add the list of os with codenames ex: ubuntu,bionic</description>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+    
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>node {
+
+  properties(
+    [
+        parameters(
+            [string(description: 'Please enter the PXE subnet IP address of the host on where MAAS service will be installed', name: 'maas_node_ip'),
+            choice(name: 'maas_version', choices: ['2.8','2.9','3.0','3.1'], description: 'maas version'),
+            string(description: 'Enter the maas server admin name', name: 'maas_admin_name', defaultValue: 'admin'),
+            string(description: 'Enter the maas server admin email', name: 'maas_admin_email', defaultValue: 'admin@xyz.com'),
+            password(description: 'Enter the password for "maas_admin_name" which will be used to login into MAAS UI. **Note: the Password should be alphanumeric with minimum 8 characters', name: 'maas_admin_password', defaultValue: 'test123'),
+            string(description: 'Enter the ntp server hostname or Ip address', name: 'ntp_server', defaultValue: 'samay1.nic.in'),
+            string(description: 'Enter the http proxy server hostname or Ip address', name: 'http_proxy', defaultValue: 'http://10.246.180.234:3128'),
+            string(description: 'Enter the dns server ip details to be used by MAAS', name: 'dns_server', defaultValue: '1.10.10.10'),
+            string(description: 'Add the PXE subnet used for the MAAS DHCP server in format ex: 10.246.183.0/24  to enable dhcp PXE boot', name: 'maas_dhcp_subnet', defaultValue: '10.246.183.0/24'),
+            string(description: 'Add Start IP address for  PXE subnet DHCP pool range ', name: 'dhcp_range_start_ip', defaultValue: '10.246.183.100'),
+            string(description: 'Add End IP address for PXE subnet DHCP pool range ', name: 'dhcp_range_end_ip', defaultValue: '10.246.183.200'),
+            string(description: 'Enter the username with root access used to ssh into the host running MAAS Server, ** Note : an ssh key will be generated for this user if not already created which will be added in the nodes post os installtion through this maas server', name: 'maas_server_username', defaultValue: 'root'),
+            choice(name: 'create_passwordless_ssh_key', choices: ['Yes','No'], description: 'If selected as "Yes" this will create a passwordless ssh key for the user provided in "maas_server_username" users home path i.e. ~/.ssh/If this option is selected as "No", it will be assumed that the password less key is already present in users home path and will use it while adding on the nodes during deployment process'),
+            text(description: 'Add the list of os with codenames ex: ubuntu,bionic', name: 'os_list', default: 'ubuntu,bionic\nubuntu,focal' ),
+
+            ]
+
+            )
+    ]
+    )
+
+
+
+
+
+
+stage ('Maas Installation Precheck'){
+        input message: ''' Prerequisuite:
+        1. Access to Ubuntu repositories to download packages and sync the images
+        2. ssh access with sudo on the host where we will be deploying the MAAS application
+        3. Subnet identified for MAAS PXE boot network
+        4. MAAS server should have "jq" ( jquery installed on the system)
+        '''
+        sh '''
+             ssh -i /var/lib/jenkins/.ssh/id_rsa "$maas_server_username"@"$maas_node_ip" exit
+        '''
+     }
+
+stage ('Maas Installation'){
+sh '''
+ set +x
+ /var/lib/jenkins/maas_package_install/install_maas_script.sh $maas_version "$maas_admin_name" "$maas_admin_email" "$maas_admin_password" "$ntp_server" "$http_proxy" "$dns_server" "$maas_node_ip" "$maas_dhcp_subnet" "$dhcp_range_start_ip" "$dhcp_range_end_ip" "$create_passwordless_ssh_key" "$maas_server_username" $os_list
+'''
+
+                            }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

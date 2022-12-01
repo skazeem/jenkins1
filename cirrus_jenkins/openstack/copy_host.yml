@@ -1,0 +1,20 @@
+---
+- hosts: compute_all,_infrastructure_hosts
+  become: yes
+  become_method: sudo
+  gather_facts: false
+  tasks:
+  - name: Copy hosts template with owner and permission, using symbolic representation
+    copy:
+      src: /etc/hosts
+      dest: /etc/hosts
+      owner: root
+      group: root
+      mode: u=rw,g=r,o=r
+  - name: Copy cloud hosts template with owner and permission, using symbolic representation
+    copy:
+      src: /etc/cloud/templates/hosts.debian.tmpl
+      dest: /etc/cloud/templates/hosts.debian.tmpl
+      owner: root
+      group: root
+      mode: u=rw,g=r,o=r

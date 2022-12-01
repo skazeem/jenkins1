@@ -1,0 +1,79 @@
+glance_images:
+- url: file:///root/cirros-0.5.1-x86_64-disk.img
+  dest: /tmp/cirros-0.5.1.img
+  checksum: sha256:c4110030e2edf06db87f5b6e4efc27300977683d53f040996d15dcc0ad49bb5a
+  format: qcow2
+  name: cirros-healthcheck
+cinder_volumes:
+- name: healthcheck1
+  size: 1
+public_net_cidr: 10.103.158.0/23
+private_net_cidr: '{{ tempest_private_subnet_cidr | default(''192.168.74.0/28'') }}'
+public_dns_servers:
+- 8.8.8.8
+- 8.8.4.4
+neutron_networks:
+  public:
+    name: '{{ tempest_public_net_name | default(''public'') }}'
+    shared: true
+    external: true
+    pn_type: flat
+    physical_network: provider
+    subnets:
+    - name: '{{ tempest_public_subnet_name | default(''public-subnet'') }}'
+      ip_version: 4
+      cidr: '{{ public_net_cidr }}'
+      enable_dhcp: 'yes'
+      dns_nameservers: '{{ public_dns_servers }}'
+  private:
+    name: '{{ tempest_private_net_name | default(''private'') }}'
+    shared: false
+    external: false
+    pn_type: '{{ tempest_private_net_provider_type | default(''vxlan'') }}'
+    segmentation_id: '{{ tempest_private_net_seg_id | default(''1'') }}'
+    subnets:
+    - name: '{{ tempest_private_subnet_name | default(''private-subnet'') }}'
+      ip_version: 4
+      cidr: '{{ private_net_cidr }}'
+      enable_dhcp: 'yes'
+heat_stack:
+  source_url: https://opendev.org/openstack/heat-templates/raw/hot/keystone/keystone_domain.yaml
+  dest_file: /tmp/mystack.yaml
+  name: babar
+  tag: dumbo
+  parameters:
+    domain_name: babar
+    domain_description: Babar Kingdom
+    domain_enabled: false
+nova_flavors:
+- name: healthcheck1
+  ram: 256
+  vcpus: 1
+  disk: 1
+  swap: 0
+  ephemeral: 0
+nova_vm:
+  name: vm1-healthcheck
+  image: cirros-healthcheck
+  flavor: healthcheck1
+  network: '{{ neutron_networks.private.name }}'
+swift_object:
+  name: fstab
+  container: config
+  filename: /etc/fstab
+security_group:
+  name: healthcheck
+  rules:
+  - protocol: tcp
+    port_range_min: 22
+    port_range_max: 22
+    remote_ip_prefix: 0.0.0.0/0
+  - protocol: tcp
+    port_range_min: 5000
+    port_range_max: 5000
+    remote_ip_prefix: 0.0.0.0/0
+  - protocol: icmp
+    port_range_min: -1
+    port_range_max: -1
+    remote_ip_prefix: 0.0.0.0/0
+ssh_key: /root/.ssh/id_rsa-healthcheck

@@ -1,0 +1,25 @@
+---
+nb_retry_wait_osd_up: 60
+delay_wait_osd_up: 10
+osd_scenario: lvm
+osd_objectstore: bluestore
+crush_rule_hdd:
+ name: HDD
+ root: default
+ type: host
+ class: hdd
+ default: false
+
+crush_rule_ssd:
+ name: SSD
+ root: default
+ type: host
+ class: ssd
+ default: false
+
+crush_rules:
+ - "{{ crush_rule_hdd }}"
+ - "{{ crush_rule_ssd }}"
+
+lvm_volumes:
+

@@ -1,0 +1,41 @@
+---
+
+component_skel:
+  masakari_engine:
+    belongs_to:
+      - masakari_all
+  masakari_api:
+    belongs_to:
+      - masakari_all
+  masakari_monitor:
+    belongs_to:
+      - masakari_all
+
+container_skel:
+  masakari_api_container:
+    belongs_to:
+      - masakari-infra_containers
+    contains:
+      - masakari_engine
+      - masakari_api
+  masakari_monitors_container:
+    belongs_to:
+      - masakari-monitor_containers
+    contains:
+      - masakari_monitor
+    properties:
+      is_metal: true
+
+physical_skel:
+  masakari-monitor_containers:
+    belongs_to:
+    - all_containers
+  masakari-monitor_hosts:
+    belongs_to:
+    - hosts
+  masakari-infra_containers:
+    belongs_to:
+    - all_containers
+  masakari-infra_hosts:
+    belongs_to:
+    - hosts

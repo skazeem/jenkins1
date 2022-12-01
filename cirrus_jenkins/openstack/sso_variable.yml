@@ -1,0 +1,37 @@
+keystone_sp:
+  apache_mod:  mod_auth_openidc
+  trusted_dashboard_list:
+    - "https://{{ external_lb_vip_address }}/auth/websso/"
+    - "https://{{ internal_lb_vip_address }}/auth/websso/"
+  trusted_idp_list:
+    - name: "keycloak-oidc-idp"
+      oidc_provider_metadata_url: metadata_url_
+      oidc_client_id:  client_id_
+      oidc_client_secret: client_secret_
+      oidc_crypto_passphrase: qwerasdfks
+      oidc_resp_type: code
+      oidc_redirect_uri: https://{{external_lb_vip_address}}:5000/v3/OS-FEDERATION/identity_providers/keycloak-oidc-idp/protocols/openid/auth
+      entity_ids:
+        - 'entity_id_url'
+      federated_identities:
+        - domain: default
+          project: fedproject
+          group: fedgroup
+          role: _member_
+      protocols:
+        - name: openid
+          mapping:
+            name: keycloak-oidc-idp-openid-mapping
+            rules:
+              - remote:
+                - type: HTTP_OIDC_ISS
+                - type: HTTP_OIDC_EMAIL
+                local:
+                  - group:
+                      name: fedgroup
+                      domain:
+                        name: Default
+                    user:
+                      name: '{1}'
+keystone_web_server: apache
+keystone_sso_callback_file_path: "/etc/openstack_deploy/sso_callback_template.html"

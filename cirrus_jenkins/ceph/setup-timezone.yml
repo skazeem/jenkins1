@@ -1,0 +1,44 @@
+---
+- name: Setup Timezone
+  hosts: all
+  user: root
+  gather_facts: false
+
+  tasks:
+    - name: Installing required packages
+      package:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - tzdata
+        - chrony
+    - name: Make sure chrony is started up
+      service: name=chronyd state=restarted enabled=yes
+
+    - name: update timezone
+      command: dpkg-reconfigure --frontend noninteractive tzdata
+    - name: Set timezone to Asia/Kolkata
+      timezone:
+        name: Asia/Kolkata
+    - name: Copy using inline content
+      lineinfile:
+        path: "{{ item }}"
+        line: "export HISTTIMEFORMAT='%F %T'"
+        state: present
+        regexp: '^export HISTTIMEFORMAT'
+      with_items:
+        - /etc/profile
+        - /root/.bashrc
+    - name: Copy Chrony conf
+      copy: 
+        src: chrony.conf
+        dest: /etc/chrony/chrony.conf
+      notify:
+      - restart chronyd
+
+  handlers:
+    - name: restart chronyd
+      service:
+        name: chronyd
+        state: restarted
+

@@ -1,0 +1,150 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Pr-requisites:&#xd;
+    1. An existing setup of Openstack.&#xd;
+&#xd;
+Below task can be prefomed. &#xd;
+    1. Healthcheck for host.&#xd;
+        a. All network connectivity(Host + Container)&#xd;
+        b. All Repository syn status.&#xd;
+        c. Test Container and venv creation.&#xd;
+        d. Check for Hosts file.&#xd;
+        e. Check for dns and external connectivity.&#xd;
+        f. Check for ssh directories&#xd;
+&#xd;
+    2. Healthcheck for Infrastructure &#xd;
+       a. Check for Haproxy and Keepalived &#xd;
+       b. Galera, memched and Rabbitmq  mesh testing.&#xd;
+&#xd;
+    3. Healthcheck for Openstack&#xd;
+       a.  Check keystone auth&#xd;
+       b. Image creation&#xd;
+       c. flavor creation&#xd;
+       d. Volume creation&#xd;
+       e . Network and Subnet create&#xd;
+       f.  Create instance with above entities.&#xd;
+       g. Attach instance to additional volume.&#xd;
+       h . Heat Template functionality testing.&#xd;
+       </description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>DeploymentNodeIp</name>
+          <description>This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>DeploymentNodeIp</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>Playbook</name>
+          <description>HostHealthcheck will do the checks related to physical host and containers 
+ Infrastructure healthcheck will check about Haproxy/Galera/RabbitMQ workings. 
+ Openstack healthcheck will do check related to provisioning of openstack resources and futionality testing of endpoints.</description>
+          <choices>
+            <string>HostHealthCheck</string>
+            <string>InfrastructureHealthcheck</string>
+            <string>OpenstackHealthcheck</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>provider_nw</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>Provider_nw</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsHome = &apos;/var/lib/jenkins&apos;
+def JenkinsOSHOME = &quot;$JenkinsHome/openstack&quot;
+def JnekinsPrivateKey = &apos;/var/lib/jenkins/id_rsa&apos;
+def OsaCd = &apos;/opt/openstack-ansible&apos;
+def OsaWd = &quot;$OsaCd/playbooks/&quot;
+
+
+node {
+  properties(
+    [
+        parameters(
+            [extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;DeploymentNodeIp&apos;, description: &apos;This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;DeploymentNodeIp&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+            choice(name: &apos;Playbook&apos;, choices: [&apos;HostHealthCheck&apos;,&apos;InfrastructureHealthcheck&apos; , &apos;OpenstackHealthcheck&apos;], description: &apos;HostHealthcheck will do the checks related to physical host and containers \n Infrastructure healthcheck will check about Haproxy/Galera/RabbitMQ workings. \n Openstack healthcheck will do check related to provisioning of openstack resources and futionality testing of endpoints.&apos; ),
+            
+            extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;Provider_nw&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;provider_nw&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+             ]
+
+            )
+    ]
+    )
+    
+    stage(&apos;Move healthcheck files&apos;) {
+    readdata = readYaml file: &quot;$JenkinsOSHOME/healthchecks-vars.yml&quot;
+    readdata.public_net_cidr = &quot;$provider_nw&quot;
+    writeYaml file: &quot;$JenkinsOSHOME/healthchecks-vars_updated.yml&quot;, data: readdata, overwrite: true
+    
+    sh &quot;&quot;&quot;
+    scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/healthchecks-vars.yml   root@$DeploymentNodeIP:/opt/openstack-ansible/playbooks/defaults/healthchecks-vars.yml
+
+    scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/ansible.cfg  root@$DeploymentNodeIP:/opt/openstack-ansible/playbooks/ansible.cfg
+    
+    &quot;&quot;&quot;
+    }
+
+    stage(&apos;Host Healthcheck&apos;) {
+    
+    if ( Playbook == &quot;HostHealthCheck&quot; ) {
+    sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/healthcheck-hosts.yml   root@$DeploymentNodeIP:/opt/openstack-ansible/playbooks/
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;cd $OsaWd &amp;&amp; openstack-ansible healthcheck-hosts.yml&apos;
+            echo &quot;status code: \$?&quot;
+        &quot;&quot;&quot;   
+        }
+    }
+    stage(&apos;Infastructure Healthcheck&apos;) {
+    if ( Playbook == &quot;InfrastructureHealthcheck&quot; ) {
+    sh &quot;&quot;&quot;
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;cd $OsaWd &amp;&amp; openstack-ansible healthcheck-infrastructure.yml&apos;
+            echo &quot;status code: \$?&quot;
+        &quot;&quot;&quot;   
+    }
+    }
+    
+    
+    stage(&apos;Openstack Healthcheck&apos;){
+    if ( Playbook == &quot;OpenstackHealthcheck&quot; ) {
+        
+    sh &quot;&quot;&quot; 
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/cirros-0.5.1-x86_64-disk.img   root@$DeploymentNodeIP:/root/
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/healthcheck-openstack.yml   root@$DeploymentNodeIP:/opt/openstack-ansible/playbooks/
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;source /opt/ansible-runtime/bin/activate &amp;&amp; pip install openstacksdk&apos;
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;apt -y install python3-openstackclient&apos;
+            
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;cd $OsaWd &amp;&amp; openstack-ansible healthcheck-openstack.yml&apos;
+            echo &quot;status code: \$?&quot;
+        &quot;&quot;&quot; 
+    }
+    }
+}
+</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

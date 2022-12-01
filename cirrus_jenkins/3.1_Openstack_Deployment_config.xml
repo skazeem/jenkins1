@@ -1,0 +1,829 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@716.vc692a_e52371b_">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Prerequisite:&#xd;
+       1. Host Being used for openstack should have all previous MAAS and Ceph pipeline executed. &#xd;
+       2. Master file should exists. &quot; /var/lib/jenkins/global_pipeline_parameters/master.properties having populated default Openstack  values.&quot;(This will be on git once we have access to git from Jenkins box.)&#xd;
+&#xd;
+Below tasks it will perform:&#xd;
+       1. Prepare Openstack_user_config.yml, user_variable.yml and sso related yaml if selected for the entry provided by master file.&#xd;
+       2. Update yml files related to Grafana, Prometheus and OpenStack exporter for container creation.&#xd;
+       3. Updated http proxy to deployment host.&#xd;
+       4. Ansible bootstrapping&#xd;
+       5. Create secrets.yaml for openstack services &#xd;
+       6. Move Updated yamls&#xd;
+       7. Execute OSA playbooks&#xd;
+       8. Create Prometheus/Grafana/Openstackexported contianers&#xd;
+       9 . Copy and Install Monitoring role.&#xd;
+       9. Below services will be deployed in HA.&#xd;
+          - Galera&#xd;
+          - Memcahce&#xd;
+          - Rabbitmq&#xd;
+          - Haparoxy &#xd;
+          - Keepaliave&#xd;
+          - Keystone&#xd;
+          - Cinder&#xd;
+          - Glance&#xd;
+          - Masakari&#xd;
+          - Nova&#xd;
+          - Neutron&#xd;
+          - Horizon &#xd;
+         &#xd;
+       </description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.5.36">
+      <gitLabConnection></gitLabConnection>
+      <jobCredentialId></jobCredentialId>
+      <useAlternativeCredential>false</useAlternativeCredential>
+    </com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>DeploymentNodeIp</name>
+          <description>This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>DeploymentNodeIp</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>OSABranch</name>
+          <description>OSA branch. which defines the version of Openstack to be installed.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>OSABranch</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ContainerSubnet</name>
+          <description>The Management Network, also referred to as the container network, provides management of and communication between the infrastructure and OpenStack services running in containers or on metal. The management network uses a dedicated VLAN typically connected to the br-mgmt bridge, and may also be used as the primary interface used to interact with the server via SSH.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ContainerSubnet</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>StorageNetwork</name>
+          <description>The Storage Network provides segregated access to Block Storage from OpenStack services such as Cinder and Glance. The storage network uses a dedicated VLAN typically connected to the br-storage bridge.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>StorageNetwork</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>TunnelSubnet</name>
+          <description>The Overlay Network, also referred to as the tunnel network, provides connectivity between hosts for the purpose of tunnelling encapsulated traffic using VXLAN, GENEVE, or other protocols. The overlay network uses a dedicated VLAN typically connected to the br-vxlan bridge</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>TunnelSubnet</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>UsedIPRange</name>
+          <description>This list should include all IP addresses manually configured on target hosts, internal load balancers, service network bridge, deployment hosts and any other devices to avoid conflicts during the automatic IP address generation process for all above Subnet you have defined. Multiple values are accepted separated by colon , Example: 192.168.0.10,192.168.0.30:10.246.184.1,10.246.184.30:10.246.183.135,10.246.183.150</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>UsedIPRange</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>InternalLBVip_address</name>
+          <description>InternalLBVip_address, this address will be assigned to haproxy VIP and will be used by OS services for internal endpoints communications</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>InternalLBVip_address</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ExternalLBVip</name>
+          <description>ExternalLBVip_address, this address will be assigned to haproxy VIP and will be used by OS services for external endpoints communication.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ExternalLBVip</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ControllerNodes</name>
+          <description>Enter the hostname controllers/infranodes separated by  comma. For eg. sp-dev-infra1,sp-dev-infra2,sp-dev-infra3</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ControllerNodes</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ComputeNodes</name>
+          <description>Enter the hostname separated by comma. For eg.sp-dev-compute1,sp-dev-compute2,sp-dev-compute3</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ComputeNodes</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>ProxyUrl</name>
+          <description>PROXY URL to be used for internet URL access, to download packages git clone etc.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>ProxyUrl</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>NtpServer</name>
+          <description>Provide IP Address or name of NTP server present in the environment, multiple values can passed separated by comma</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>NtpServer</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>openstack_service_publicuri_proto</name>
+          <description>All the public service endpoint will be configured using selected protocol, make sure to use https if SSO will be configured</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>http</string>
+              <string>https</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>KeepalivedPingAddress</name>
+          <description>This can be IP address external to Openstack setup, it make sures that there is no split in keepalived and the node which is not able to reach this IP can consider it as failed</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>KeepalivedPingAddress</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>CephMonIP</name>
+          <description>Inputs the mons IPs of already deployed ceph cluster, multiple entries can be given in comma separated form eg:10.246.184.12,10.246.184.13,10.246.184.14</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>CephMonIP</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>UseSSO</name>
+          <description>If you want SSO to be integrated with keystone keep it true, else select false.</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>false</string>
+              <string>true</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>SsoVipAddress</name>
+          <description>This is the frontendIP address of resolvable name for Single Sign-on Example: sso.cloud.gov.in</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>SsoVipAddress</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>IdpRealmName</name>
+          <description>SSO has a configured realm name for the environment, Check with concern team</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>IdpRealmName</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>OidcClientId</name>
+          <description>Update the OIDC client ID, you can get this from IDP</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>OidcClientId</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.PasswordParameterDefinition>
+          <name>OidcClientSecret</name>
+          <description>Input the secret for user defined in sp_oidc_client_id</description>
+          <defaultValue>{AQAAABAAAAAQKJXZLlfvrrNjt9kRVYLXixsGUwwf9OycI5yBLB+LHhs=}</defaultValue>
+        </hudson.model.PasswordParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>Playbook</name>
+          <description>In case of re-run one can select specific playbook to start execution with, default is setup-everything.yml</description>
+          <choices class="java.util.Arrays$ArrayList">
+            <a class="string-array">
+              <string>StartFromSetup-everything.yml</string>
+              <string>StartFromSetup-infrastructure.yml</string>
+              <string>StartFromSetup-openstack.yml</string>
+            </a>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_cpu_allocation_ratio</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_cpu_allocation_ratio</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_disk_allocation_ratio</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_disk_allocation_ratio</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_max_instances_per_host</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_max_instances_per_host</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_max_io_ops_per_host</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_max_io_ops_per_host</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_ram_allocation_ratio</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_ram_allocation_ratio</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_ram_weight_multiplier</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_ram_weight_multiplier</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>nova_reserved_host_disk_mb</name>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>5</visibleItemCount>
+          <type>PT_HIDDEN</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>nova_reserved_host_disk_mb</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.2664.v4c114e93f4c1">
+    <script>    def JenkinsHome = &apos;/var/lib/jenkins&apos;
+    def JenkinsOSHOME = &quot;$JenkinsHome/openstack&quot;
+    def JnekinsPrivateKey = &apos;/var/lib/jenkins/.ssh/id_rsa&apos;
+    def OsaCd = &apos;/opt/openstack-ansible&apos;
+    def OsaWd = &quot;$OsaCd/playbooks/&quot;
+    def OSetc = &apos;/etc/openstack_deploy/&apos;
+    def OSenv = &apos;/etc/openstack_deploy/env.d/&apos;
+    def OSACloning = &apos;true&apos;
+    def YAMLUpdate = &apos;true&apos;
+    def InstallMasakari = &apos;true&apos;
+    def OSARepository = &apos;https://github.com/openstack/openstack-ansible.git&apos;
+    def GrafanaNodes = &apos;&apos;
+    def LoggingNodes = &apos;&apos;
+    def PrometheusNodes = &apos;&apos;
+    
+    def KeystoneWebServer = &apos;apache&apos;
+    
+    def get_ip(def hostname) {
+        def host_list = &quot;&quot;
+        def data = readFile(file: &apos;/var/lib/jenkins/openstack/ip_hostname&apos;)
+        data = data.split(&apos;\n&apos;)
+        hosts = hostname.split(&apos;,&apos;)  
+        for ( def i = 0 ; i &lt; hosts.length ; i++ ) {
+            for ( def j = 0 ; j &lt; data.length ; j++ ){
+                if ( data[j].contains(hosts[i]) ) {
+                host_list = host_list + data[j] + &apos;,&apos;
+                break;
+                } 
+            }
+        }
+        host_list = host_list.substring(0,host_list.length() - 1)
+        return host_list 
+        //println host_list
+    }
+
+
+    node {
+      properties(
+        [
+            parameters(
+                [
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;DeploymentNodeIp&apos;, description: &apos;This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;DeploymentNodeIp&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                //choice(name: &apos;OSACloning&apos;, choices: [&apos;true&apos;, &apos;false&apos;], description: &apos;If pipeline is executing first time for a particular setup, keep it true if its subsequent step make it false so that all the cloning and ansible bootstrapping can be avoided&apos;),
+                
+                //choice(name: &apos;YAMLUpdate&apos;, choices: [&apos;true&apos;, &apos;false&apos;], description: &apos;If pipeline is executing first time for a particular setup, keep it true if its subsequent and you don’t want to change any YAML parameters select false&apos;),
+
+                //choice(name: &apos;UseSSO&apos;, choices: [&apos;false&apos;, &apos;true&apos;], description: &apos;If you want SSO to be integrated with keystone keep it else select false&apos;),
+
+                //extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;OSARepository&apos;, description: &apos;OSA repository , it can be public or locally cloned internal tracker repository&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;OSARepository&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;OSABranch&apos;, description: &apos;OSA branch. which defines the version of Openstack to be installed.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;OSABranch&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;ContainerSubnet&apos;, description: &apos;The Management Network, also referred to as the container network, provides management of and communication between the infrastructure and OpenStack services running in containers or on metal. The management network uses a dedicated VLAN typically connected to the br-mgmt bridge, and may also be used as the primary interface used to interact with the server via SSH.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;ContainerSubnet&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;StorageNetwork&apos;, description: &apos;The Storage Network provides segregated access to Block Storage from OpenStack services such as Cinder and Glance. The storage network uses a dedicated VLAN typically connected to the br-storage bridge.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;StorageNetwork&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;TunnelSubnet&apos;, description: &apos;The Overlay Network, also referred to as the tunnel network, provides connectivity between hosts for the purpose of tunnelling encapsulated traffic using VXLAN, GENEVE, or other protocols. The overlay network uses a dedicated VLAN typically connected to the br-vxlan bridge&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;TunnelSubnet&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;UsedIPRange&apos;, description: &apos;This list should include all IP addresses manually configured on target hosts, internal load balancers, service network bridge, deployment hosts and any other devices to avoid conflicts during the automatic IP address generation process for all above Subnet you have defined. Multiple values are accepted separated by colon , Example: 192.168.0.10,192.168.0.30:10.246.184.1,10.246.184.30:10.246.183.135,10.246.183.150&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;UsedIPRange&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;InternalLBVip_address&apos;, description: &apos;InternalLBVip_address, this address will be assigned to haproxy VIP and will be used by OS services for internal endpoints communications&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;InternalLBVip_address&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;ExternalLBVip&apos;, description: &apos;ExternalLBVip_address, this address will be assigned to haproxy VIP and will be used by OS services for external endpoints communication.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;ExternalLBVip&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;ControllerNodes&apos;, description: &apos;Enter the hostname controllers/infranodes separated by  comma. For eg. sp-dev-infra1,sp-dev-infra2,sp-dev-infra3&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;ControllerNodes&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;ComputeNodes&apos;, description: &apos;Enter the hostname separated by comma. For eg.sp-dev-compute1,sp-dev-compute2,sp-dev-compute3&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;ComputeNodes&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                //extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;GrafanaNodes&apos;, description: &apos;Enter the hostname and IP of node used for installing Grafana separated by colon and each such entries should be comma separated. For eg.sp-dev-infra1:10.246.184.12, if Grafana service is not needed keep default values i.e {}&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;GrafanaNodes&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                //extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;LoggingNodes&apos;, description: &apos;Enter the hostname and IP of node used for installing Logging service separated by colon and each such entries should be comma separated. For eg.sp-dev-infra1:10.246.184.12, if Logging service is not needed keep default values i.e. {}&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;LoggingNodes&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                //choice(name: &apos;InstallMasakari&apos;, choices: [&apos;true&apos;, &apos;false&apos;], description: &apos;If it is set to true respective Masakari services will be install on infra and computes&apos;),
+
+                //extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;PrometheusNodes&apos;, description: &apos;Enter the hostname and IP of node used for installing PrometheusServer/Openstack-exporter service separated by colon and each such entries should be comma separated. Same inputs will be used for both the services container. For eg.sp-dev-infra2:10.246.184.13,sp-dev-infra3:10.246.184.14. If Prometheus setup is not needed keep it default i.e {}&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;PrometheusNodes&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;ProxyUrl&apos;, description: &apos;PROXY URL to be used for internet URL access, to download packages git clone etc.&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;ProxyUrl&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;NtpServer&apos;, description: &apos;Provide IP Address or name of NTP server present in the environment, multiple values can passed separated by comma&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;NtpServer&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                choice(name: &apos;openstack_service_publicuri_proto&apos;, choices: [&apos;http&apos;, &apos;https&apos;], description: &apos;All the public service endpoint will be configured using selected protocol, make sure to use https if SSO will be configured&apos;),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;KeepalivedPingAddress&apos;, description: &apos;This can be IP address external to Openstack setup, it make sures that there is no split in keepalived and the node which is not able to reach this IP can consider it as failed&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;KeepalivedPingAddress&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;CephMonIP&apos;, description: &apos;Inputs the mons IPs of already deployed ceph cluster, multiple entries can be given in comma separated form eg:10.246.184.12,10.246.184.13,10.246.184.14&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;CephMonIP&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                //choice(name: &apos;KeystoneWebServer&apos;, choices: [&apos;apache&apos;, &apos;nginx&apos;], description: &apos;We have two option available for keystone webservice nginx and apache any can be used but when using OIDC it should be  apache only&apos;),
+                
+                choice(name: &apos;UseSSO&apos;, choices: [&apos;false&apos;, &apos;true&apos;], description: &apos;If you want SSO to be integrated with keystone keep it true, else select false.&apos;),
+                
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;SsoVipAddress&apos;, description: &apos;This is the frontendIP address of resolvable name for Single Sign-on Example: sso.cloud.gov.in&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;SsoVipAddress&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;IdpRealmName&apos;, description: &apos;SSO has a configured realm name for the environment, Check with concern team&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;IdpRealmName&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;OidcClientId&apos;, description: &apos;Update the OIDC client ID, you can get this from IDP&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;OidcClientId&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+                
+                password(description: &apos;Input the secret for user defined in sp_oidc_client_id&apos;, name: &apos;OidcClientSecret&apos;),
+                
+                choice(name: &apos;Playbook&apos;, choices: [&apos;StartFromSetup-everything.yml&apos;,&apos;StartFromSetup-infrastructure.yml&apos; , &apos;StartFromSetup-openstack.yml&apos;], description: &apos;In case of re-run one can select specific playbook to start execution with, default is setup-everything.yml&apos; ),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_cpu_allocation_ratio&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_cpu_allocation_ratio&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_disk_allocation_ratio&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_disk_allocation_ratio&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_max_instances_per_host&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_max_instances_per_host&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_max_io_ops_per_host&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_max_io_ops_per_host&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_ram_allocation_ratio&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_ram_allocation_ratio&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_ram_weight_multiplier&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_ram_weight_multiplier&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5),
+
+                extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;nova_reserved_host_disk_mb&apos;, description: &apos;&apos;, multiSelectDelimiter: &apos;,&apos;, name: &apos;nova_reserved_host_disk_mb&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_HIDDEN&apos;, visibleItemCount: 5) 
+                ]
+                )
+                
+
+        ]
+        ) 
+        
+     
+    stage(&apos;Update Yamls&apos;) {
+    sh &quot;&quot;&quot;
+    $JenkinsOSHOME/fetch_management_ip.sh
+    &quot;&quot;&quot;
+
+    if ( YAMLUpdate == &quot;true&quot;) {                                          
+
+    //Updated openstack_user_config.yml
+    
+    readdata = readYaml file: &quot;$JenkinsOSHOME/openstack_user_config.yml&quot;
+    ControllerNodes = get_ip(ControllerNodes)
+    println &quot;$ControllerNodes&quot;
+    GrafanaNodes = ControllerNodes.split(&apos;,&apos;)[0]
+    LoggingNodes = ControllerNodes.split(&apos;,&apos;)[1]
+    PrometheusNodes = ControllerNodes.split(&apos;,&apos;)[1] + &apos;,&apos; + ControllerNodes.split(&apos;,&apos;)[2] 
+    
+    println &quot;Grafana Nodes: $GrafanaNodes Syslog Loggin Node: $LoggingNodes Prometheus Nodes: $PrometheusNodes OpenstackExporter: $PrometheusNodes&quot;
+
+    println &quot;Provided Advance Nova tuning&quot;
+    println &quot;nova_cpu_allocation_ratio = $nova_cpu_allocation_ratio&quot;
+    println &quot;nova_disk_allocation_ratio = $nova_disk_allocation_ratio&quot;
+    println &quot;nova_max_instances_per_host = $nova_max_instances_per_host&quot;
+    println &quot;nova_max_io_ops_per_host = $nova_max_io_ops_per_host&quot;
+    println &quot;nova_ram_allocation_ratio = $nova_ram_allocation_ratio&quot;
+    println &quot;nova_ram_weight_multiplier = $nova_ram_weight_multiplier&quot;
+    println &quot;nova_reserved_host_disk_mb = $nova_reserved_host_disk_mb&quot;
+    
+    String abc1 = &quot;&quot;
+    nameippair = ControllerNodes.split(&apos;,&apos;)
+    for (def a  in nameippair )
+    {
+       subArray = a.split(&apos;:&apos;)
+       key = subArray[0]
+       value = subArray[1]
+       abc1 = abc1 + key + &quot;:\n&quot; + &quot;  ip: &quot; + value + &quot;\n&quot; 
+        
+    }
+    readdata._infrastructure_hosts = &quot;$abc1&quot;
+    readdata.&quot;placement-infra_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;shared-infra_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;repo-infra_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;haproxy_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;identity_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;storage-infra_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;storage_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;image_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;compute-infra_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;orchestration_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;dashboard_hosts&quot; = &quot;$abc1&quot;
+    readdata.&quot;network_hosts&quot; = &quot;$abc1&quot;
+    
+    
+    if ( InstallMasakari == &quot;true&quot;) {
+    readdata.&quot;masakari-infra_hosts&quot; = &quot;$abc1&quot;
+    }
+    String abc2 = &quot;&quot;
+    ComputeNodes = get_ip(ComputeNodes)
+    println &quot;$ComputeNodes&quot;
+    nameippair = ComputeNodes.split(&apos;,&apos;)
+    for (def a  in nameippair )
+    {
+       subArray = a.split(&apos;:&apos;)
+       key = subArray[0]
+       value = subArray[1]
+       abc2 = abc2 + key + &quot;:\n&quot; + &quot;  ip: &quot; + value + &quot;\n&quot; 
+        
+    }
+    readdata.compute_hosts = &quot;$abc2&quot;
+    
+    if ( InstallMasakari == &quot;true&quot;) {
+        
+    readdata.&quot;masakari-monitor_hosts&quot; = &quot;$abc2&quot;
+    }
+    if ( PrometheusNodes != &quot;{}&quot; ) {
+    println &quot;$PrometheusNodes&quot;
+    String abc4 = &quot;&quot;
+    nameippair = PrometheusNodes.split(&apos;,&apos;)
+    for (def a  in nameippair )
+    {
+       subArray = a.split(&apos;:&apos;)
+       key = subArray[0]
+       value = subArray[1]
+       abc4 = abc4 + key + &quot;:\n&quot; + &quot;  ip: &quot; + value + &quot;\n&quot; 
+        
+    }
+    readdata.prometheus_hosts = &quot;$abc4&quot;
+    readdata.&quot;openstack-exporter_hosts&quot; = &quot;$abc4&quot;
+    
+    }
+    
+    
+    String abc3 = &quot;&quot;
+    if ( GrafanaNodes != &quot;{}&quot;) {
+    nameippair = GrafanaNodes.split(&apos;,&apos;)
+    for (def a  in nameippair )
+    {
+       subArray = a.split(&apos;:&apos;)
+       key = subArray[0]
+       value = subArray[1]
+       abc3 = abc3 + key + &quot;:\n&quot; + &quot;  ip: &quot; + value + &quot;\n&quot; 
+        
+    }
+    readdata.grafana_hosts = &quot;$abc3&quot;
+    }
+    
+    
+    String abc5 = &quot;&quot;
+    if ( LoggingNodes != &quot;{}&quot;) {
+    nameippair = LoggingNodes.split(&apos;,&apos;)
+    for (def a  in nameippair )
+    {
+       subArray = a.split(&apos;:&apos;)
+       key = subArray[0]
+       value = subArray[1]
+       abc5 = abc5 + key + &quot;:\n&quot; + &quot;  ip: &quot; + value + &quot;\n&quot; 
+        
+    }
+    readdata.log_hosts = &quot;$abc5&quot;
+    }
+
+    readdata.cidr_networks.container = &quot;$ContainerSubnet&quot;
+    readdata.cidr_networks.storage = &quot;$StorageNetwork&quot;
+    readdata.cidr_networks.tunnel = &quot;$TunnelSubnet&quot;
+    readdata.global_overrides.internal_lb_vip_address = &quot;$InternalLBVip_address&quot;
+    readdata.global_overrides.external_lb_vip_address = &quot;$ExternalLBVip&quot;
+
+    ranges = UsedIPRange.split(&apos;:&apos;);
+           readdata.used_ips = []
+           ranges.eachWithIndex { item, index -&gt;
+           range = ranges[index]
+           readdata.used_ips[index] = range
+            
+           }  
+
+    writeYaml file: &quot;$JenkinsOSHOME/$BUILD_NUMBER/openstack_user_config.yml&quot;, data: readdata, overwrite: true
+
+    sh &quot;&quot;&quot;
+      sed -i  &apos;s/|//g&apos;  $JenkinsOSHOME/$BUILD_NUMBER/openstack_user_config.yml
+    &quot;&quot;&quot;
+
+    //Update user_variable.yml 
+
+        readdata = readYaml file: &quot;$JenkinsOSHOME/user_variable.yml&quot;
+        readdata.proxy_env_url = &quot;$ProxyUrl&quot;
+        readdata.openstack_service_publicuri_proto =&quot;$openstack_service_publicuri_proto&quot;
+        readdata.keepalived_ping_address = &quot;$KeepalivedPingAddress&quot;
+
+      ntpservers = NtpServer.split(&apos;,&apos;);
+                   readdata.security_ntp_servers = []
+                   ntpservers.eachWithIndex { item, index -&gt;
+                   readdata.security_ntp_servers[index] = ntpservers[index]
+                   }  
+
+      monservers = CephMonIP.split(&apos;,&apos;);
+                   readdata.ceph_mons = []
+                   monservers.eachWithIndex { item, index -&gt;
+                   //monserver = monservers[index]
+                   readdata.ceph_mons[index] = monservers[index]
+                   }
+        readdata.nova_cpu_allocation_ratio = &quot;$nova_cpu_allocation_ratio&quot;
+        readdata.nova_disk_allocation_ratio = &quot;$nova_disk_allocation_ratio&quot;
+        readdata.nova_max_instances_per_host = &quot;$nova_max_instances_per_host&quot;
+        readdata.nova_max_io_ops_per_host = &quot;$nova_max_io_ops_per_host&quot;
+        readdata.nova_ram_allocation_ratio = &quot;$nova_ram_allocation_ratio&quot;
+        readdata.nova_ram_weight_multiplier = &quot;$nova_ram_weight_multiplier&quot;
+        readdata.nova_reserved_host_disk_mb = &quot;$nova_reserved_host_disk_mb&quot;
+
+    writeYaml file: &quot;$JenkinsOSHOME/$BUILD_NUMBER/user_variable.yml&quot;, data: readdata, overwrite: true
+                    
+
+
+    //Create URL out of Realm and SSO_VIP_Address
+    def entity_ids=&quot;https://&quot;+&quot;$SsoVipAddress&quot;+&quot;/auth/realms/&quot;+&quot;$IdpRealmName&quot;+&quot;/&quot;
+    def sp_oidc_provider_metadata_url=&quot;https://&quot;+&quot;$SsoVipAddress&quot;+&quot;/auth/realms/&quot;+&quot;$IdpRealmName&quot;+&quot;/.well-known/openid-configuration&quot;
+
+    // Update SSO user variable yaml
+    if ( UseSSO == &quot;true&quot; ) {
+    readdata = readYaml file: &quot;$JenkinsOSHOME/sso_variable.yml&quot;
+
+      readdata.keystone_sp.trusted_idp_list[0].oidc_provider_metadata_url = &quot;$sp_oidc_provider_metadata_url&quot;
+      readdata.keystone_sp.trusted_idp_list[0].oidc_client_id = &quot;$OidcClientId&quot; 
+      readdata.keystone_sp.trusted_idp_list[0].oidc_client_secret = &quot;$OidcClientSecret&quot;
+      readdata.keystone_sp.trusted_idp_list[0].entity_ids[0] = &quot;$entity_ids&quot;
+
+    writeYaml file: &quot;$JenkinsOSHOME/$BUILD_NUMBER/user_variable_sso.yml&quot;, data: readdata, overwrite: true
+    }
+
+    } 
+     else {                                   
+            println &quot;No Updating YAMLs as YAMLUpdate was set to false&quot;
+        }
+    sh &quot;&quot;&quot;
+       echo &quot;######Prepared Openstack_user_config.yml#####&quot;
+       cat  &quot;$JenkinsOSHOME/$BUILD_NUMBER/openstack_user_config.yml&quot;
+       echo &quot;######Prepared user_variable.yml######&quot;
+       cat  &quot;$JenkinsOSHOME/$BUILD_NUMBER/user_variable.yml&quot;  
+    &quot;&quot;&quot;   
+
+     }
+     
+    stage(&apos;Colne the repository&apos;) {
+        if ( OSACloning == &quot;true&quot; ) {
+
+        println &quot;Passed deployment IP : $DeploymentNodeIp&quot;
+
+        sh &quot;&quot;&quot;
+        
+            ssh -i $JnekinsPrivateKey -o StrictHostKeyChecking=no root@$DeploymentNodeIp &quot;grep http_proxy /etc/environment ||  echo http_proxy=$ProxyUrl &gt;&gt;/etc/environment; grep https_proxy /etc/environment ||  echo https_proxy=$ProxyUrl &gt;&gt; /etc/environment&quot;
+            #ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;rm -rf /opt/openstack-ansible&apos;
+            ssh  -o StrictHostKeyChecking=no -i  $JnekinsPrivateKey root@$DeploymentNodeIp &apos;if [ -d /opt/openstack-ansible ]; then echo &quot;Directory exits&quot; ; else git clone -b $OSABranch $OSARepository $OsaCd ; fi&apos; 
+
+        &quot;&quot;&quot;
+
+        }
+        else {
+            println &quot;Not Cloning the repository as OSACloning was set to false &quot;
+        }
+        
+    }
+
+    stage(&apos;Anisble_bootstraping&apos;) {
+        
+        println &quot;This stage will bootstrap and copy etc directory along with secret generation  for OSA&quot;
+        if ( OSACloning == &quot;true&quot; ) {
+
+        sh &quot;&quot;&quot;
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;if [ -f /usr/local/bin/openstack-ansible ] ; then echo &quot;Openstack already bootstrapped&quot;; else cd /opt/openstack-ansible/scripts &amp;&amp; ./bootstrap-ansible.sh ; fi&apos;
+            ssh  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp &apos;if [ -f /etc/openstack_deploy/user_secrets.yml ]; then echo &quot;File exists&quot; ; else cp -pr /opt/openstack-ansible/etc/openstack_deploy /etc/ &amp;&amp; cd /opt/openstack-ansible &amp;&amp; ./scripts/pw-token-gen.py --file /etc/openstack_deploy/user_secrets.yml ; fi&apos;
+        
+        &quot;&quot;&quot;   
+        }
+        else {
+            println &quot;Not boorstapping as OSACloning is set as  false&quot;
+        } 
+    }
+
+    stage (&apos;Move Updated yamls to deployment node&apos;) {
+        if ( YAMLUpdate == &quot;true&quot;) {
+
+        sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/$BUILD_NUMBER/openstack_user_config.yml root@$DeploymentNodeIp:$OSetc/openstack_user_config.yml
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/$BUILD_NUMBER/user_variable.yml root@$DeploymentNodeIp:$OSetc/user_variable.yml
+        &quot;&quot;&quot;
+        if ( UseSSO == &quot;true&quot; ) {
+            sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/$BUILD_NUMBER/user_variable_sso.yml  root@$DeploymentNodeIp:$OSetc/user_variable_sso.yml
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/sso_callback_template.html  root@$DeploymentNodeIp:$OSetc/sso_callback_template.html
+            &quot;&quot;&quot;
+        }
+
+        if ( InstallMasakari == &quot;true&quot;) {
+
+        sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/masakari.yaml root@$DeploymentNodeIp:$OSenv/masakari.yaml
+        &quot;&quot;&quot;
+
+        }
+
+        if ( GrafanaNodes != &quot;{}&quot;) {
+        sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/grafana.yaml root@$DeploymentNodeIp:$OSenv/grafana.yaml
+        &quot;&quot;&quot;
+
+        }
+
+        if ( PrometheusNodes != &quot;{}&quot;) {
+        sh &quot;&quot;&quot;
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/prometheus.yaml root@$DeploymentNodeIp:$OSenv/prometheus.yaml 
+            scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/ops-exporter.yaml root@$DeploymentNodeIp:$OSenv/ops-exporter.yaml
+
+        &quot;&quot;&quot;
+
+        }
+
+        }
+
+        else {
+            println &quot;Not coping yaml as YAML are not updated because YAMLUpdate is set as  false&quot;
+        }
+    }
+
+    stage (&apos;Execute OSA playbooks&apos;) {
+        if ( Playbook == &quot;StartFromSetup-everything.yml&quot; ) {
+        sh &quot;&quot;&quot;
+            echo &quot;################Copy NIC theme for horizon&quot;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;mkdir -p /etc/openstack_deploy/horizon&apos;
+            scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  $JenkinsOSHOME/niccloud.tar.gz root@$DeploymentNodeIp:/etc/openstack_deploy/horizon/
+
+            scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  $JenkinsOSHOME/ovs-setup.yml root@$DeploymentNodeIp:/opt/openstack-ansible/playbooks/
+            
+            echo &quot;###############Executing SetupHost playbook #################&quot;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-hosts.yml&apos;
+            
+
+
+            echo &quot;###############Host Setup Execution finished ################&quot;
+
+            echo &quot;###############Executing Infrastructure playbook #################&quot;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-infrastructure.yml&apos;
+            echo &quot;###############Infrastructure Execution finished ################&quot;
+
+            echo &quot;###############Executing Openstack playbook #################&quot;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-openstack.yml&apos;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible ovs-setup.yml&apos;
+            echo &quot;###############Openstack setup finished ################&quot;
+        &quot;&quot;&quot;
+        }
+        if ( Playbook == &quot;StartFromSetup-infrastructure.yml&quot; ) {
+            println &quot;As StartFromSetup-infrastructure.yml is selected in playbook, host-setup will not be executed&quot;
+        
+        sh &quot;&quot;&quot;
+            echo &quot;###############Executing Infrastructure playbook #################&quot;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-infrastructure.yml&apos;
+            echo &quot;###############Infrastructure Execution finished ################&quot;
+
+            echo &quot;###############Executing Openstack  playbook #################&quot;
+            scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  $JenkinsOSHOME/ovs-setup.yml root@$DeploymentNodeIp:/opt/openstack-ansible/playbooks/
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-openstack.yml&apos;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible ovs-setup.yml&apos;
+            echo &quot;###############Openstack setup  finished ################&quot;
+        &quot;&quot;&quot;
+        }
+        if ( Playbook == &quot;StartFromSetup-openstack.yml&quot; ) {
+            println &quot;As StartFromSetup-openstack.yml is selected in playbook, host-setup and infrastructure setup will not be executed&quot;
+        
+        sh &quot;&quot;&quot;
+            echo &quot;###############Executing Openstack playbook #################&quot;
+            scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  $JenkinsOSHOME/ovs-setup.yml root@$DeploymentNodeIp:/opt/openstack-ansible/playbooks/
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible setup-openstack.yml&apos;
+            ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd $OsaWd ; openstack-ansible ovs-setup.yml&apos;
+            echo &quot;###############Openstack setup finished ################&quot;
+        &quot;&quot;&quot;
+        }
+    }
+
+     stage(&apos;BD backup cron&apos;) {
+    sh &quot;&quot;&quot;
+    scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey /var/lib/jenkins/openstack/db_backup.sh root@$DeploymentNodeIp:/root/
+    ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &quot;cd /opt/openstack-ansible/playbooks &amp;&amp; ansible utility_all[0] -m copy -a &apos;src=/root/db_backup.sh dest=/root/ mode=750&apos;&quot;
+    ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &quot;cd /opt/openstack-ansible/playbooks &amp;&amp; ansible utility_all[0] -m apt -a &apos;name=cron state=present&apos;&quot;
+    ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &quot;cd /opt/openstack-ansible/playbooks &amp;&amp; ansible utility_all[0] -m cron -a &apos;name=DB_backup_cron job=root/db_backup.sh hour=2 minute=0&apos;&quot;
+
+    &quot;&quot;&quot;
+    }
+
+    
+    stage (&apos;Copy Monitoring role&apos;) {
+    sh &quot;&quot;&quot;
+    ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;ansible-galaxy collection install -p /etc/ansible/ansible_collections/ community.grafana&apos;
+    scp -o StrictHostKeyChecking=no -i $JnekinsPrivateKey /var/lib/jenkins/openstack/monitoring.tar root@$DeploymentNodeIp:/etc/ansible/roles/
+    ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd /etc/ansible/roles ; tar -xvf monitoring.tar; cp -r monitoring/playbooks/* $OsaWd; cd $OsaWd ; openstack-ansible monitoring_install.yml &amp;&amp; openstack-ansible monitoring_start.yml&apos;
+    #ssh -o StrictHostKeyChecking=no -i $JnekinsPrivateKey  root@$DeploymentNodeIp &apos;cd /etc/ansible/roles ; tar -xvf monitoring.tar; cp -r monitoring/playbooks/* $OsaWd&apos;
+    
+    &quot;&quot;&quot;
+}
+
+    }
+</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+

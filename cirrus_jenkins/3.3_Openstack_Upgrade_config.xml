@@ -1,0 +1,77 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Pre-requisisted:&#13;
+    1. An exiting Openstack setup with Wallaby release.&#13;
+&#13;
+Below task will be achieved.&#13;
+     1. Take the back of existing mysql and Anisble related files.&#13;
+     2. Checkout the Xena release repository &#13;
+     3. Run upgraded scripts.</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>DeploymentNodeIp</name>
+          <description>Please enter the IP address of the host from where OSA deployment will be executed</description>
+          <defaultValue>hyd-mg-controller3</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JnekinsPrivateKey = '/var/lib/jenkins/id_rsa'
+node {
+  properties(
+    [
+        parameters(
+            [string(description: 'Please enter the IP address of the host from where OSA deployment will be executed', name: 'DeploymentNodeIp', defaultValue: 'hyd-mg-controller3')]
+            )
+            ]
+            )
+
+stage('pre check') {
+	println "exit if Ubuntu version is not 20.04 i.e Focal, As ussuri cannot be install on 18.04"
+
+    def output = sh (script: "ssh -q  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp 'lsb_release -a'", returnStdout: true)
+
+if (output.contains('20.04')) {
+}
+else {
+  	println 'exit if Ubuntu version is not 20.04 i.e Focal, As ussuri cannot be install on 18.04, Please update to ubuntu 20 First'
+  	sh 'exit 124'
+	}
+
+
+}
+
+stage('Backup database') {
+
+    
+    sh """
+    ssh -q -o StrictHostKeyChecking=no -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd /opt/openstack-ansible/playbooks ; ansible galera[0] -m shell -a "'" mysqldump -h localhost --all-databases --single-transaction --quick --lock-tables=false &gt; /var/log/mysql/full-backup-\$(date +%F).sql "'" '
+    """
+}
+
+
+stage('Run upgrade script') {
+
+
+sh """
+  	ssh -q -o StrictHostKeyChecking=no -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd /opt/openstack-ansible/; git checkout 23.3.1 ; ./scripts/run-upgrade.sh'
+"""
+}
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

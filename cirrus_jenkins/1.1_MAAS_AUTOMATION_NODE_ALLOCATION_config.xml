@@ -1,0 +1,103 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Pre-requisuite:&#xd;
+1. Hardware RAID configuration to be performed by User and should be in place before initiating pipeline&#xd;
+2. Proper hostname and pool should be added to machines from MAAS UI&#xd;
+3. Check if ports are open from source maas server ip to target nodes BMC ( ILO / IDRAC / IPMI )  ip address UDP/623&#xd;
+4. MAAS server should have &quot;jq&quot; ( jquery installed on the system)&#xd;
+5.    Master file &quot; /var/lib/jenkins/global_pipeline_parameters/master.properties&quot; should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.) &#xd;
+6. To get the list of newly enlisted nodes to be allocated  and parsed in &quot;server_list&quot; variable  execute the following command on the maas server  &#xd;
+a.  #  api_key=&quot;`sudo maas apikey --username &lt;maas_login_user_name&gt;`&quot;&#xd;
+b.  # sudo maas login &lt;maas_login_user_name&gt; http://&lt;maas_server_ip&gt;:5240/MAAS   $api_key&#xd;
+c.  # sudo maas &lt;maas_login_user_name&gt;  machines read | jq -r &apos;.[] | .hostname + &quot;,&quot; + .status_message + &quot;,&quot; + .system_id&apos;|  grep  -i New&#xd;
+&#xd;
+&#xd;
+This pipeline will perform below tasks&#xd;
+1. Check for new enlisted node&#xd;
+2. Commission the node to bring it in ready state&#xd;
+2. Post this pipeline completion the user needs to perform below manual check&#xd;
+ a. Verify if the proper disks are selected to install OS, if required this can be changed for the machine through UI&#xd;
+ b. Verify if the PXE IP address is properly assigned, if needed it can be changed from UI</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_server_ip</name>
+          <description>Enter the IP address of the server on which MAAS application service is installed and running</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_server_ip</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_admin</name>
+          <description>Enter the admin user name  used for  MAAS application UI/CLI login</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_admin</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>server_list</name>
+          <description>In each new line enter the server information in New state &quot;hostname,status,system_id&quot; Ex: &quot;hyd-mg-compute1,New,krsmdq&quot; * Note : If the user want to commission all enlisted nodes then the server list variable can be left as blank and system will identify the nodes in &quot;New&quot; state and commission these nodes  </description>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsPrivateKey = &apos;/var/lib/jenkins/.ssh/id_rsa&apos;
+def maas_server_admin =&apos;root&apos;
+import groovy.text.*
+node {
+  properties(
+    [
+        parameters(
+            [//string(description: &apos;Please enter the IP address of the host maas server application is deployed&apos;, name: &apos;maas_server_ip&apos;, defaultValue: &apos;&apos;),
+        //    text(description: &apos;In Each line Enter the server information to be onboarded in the format below hostname,domain,mac_address,power_admin,power_password,ipmi_ip_address&apos;, name: &apos;server_list&apos;, defaultValue: &apos;sp-dev-compute1,dev,48:df:37:04:41:37,hpadmin,hpinvent,10.246.182.135\nsp-dev-compute2,dev,48:df:37:04:43:69,hpadmin,hpinvent,10.246.182.136\nsp-dev-compute3,dev,48:df:37:04:40:1b,hpadmin,hpinvent,10.246.182.137&apos;),
+           // string(description: &apos;Enter the username for  maas application with Admin access which is used to access UI and CLI of maas&apos;, name: &apos;maas_admin&apos;, defaultValue: &apos;&apos;),
+           // string(description: &apos;Enter the OS username to be used to ssh to  the MAAS server&apos;, name: &apos;maas_server_admin&apos;, defaultValue: &apos;&apos;),
+            extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;maas_server_ip&apos;, description: &apos;Enter the IP address of the server on which MAAS application service is installed and running&apos;, multiSelectDelimiter: &apos; &apos;, name: &apos;maas_server_ip&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+            extendedChoice(defaultPropertyFile: &apos;/var/lib/jenkins/global_pipeline_parameters/master.properties&apos;, defaultPropertyKey: &apos;maas_admin&apos;, description: &apos;Enter the admin user name  used for  MAAS application UI/CLI login&apos;, multiSelectDelimiter: &apos; &apos;, name: &apos;maas_admin&apos;, quoteValue: false, saveJSONParameterToFile: false, type: &apos;PT_TEXTBOX&apos;, visibleItemCount: 1),
+            text(description: &apos;In each new line enter the server information in New state &quot;hostname,status,system_id&quot; Ex: &quot;hyd-mg-compute1,New,krsmdq&quot; * Note : If the user want to commission all enlisted nodes then the server list variable can be left as blank and system will identify the nodes in &quot;New&quot; state and commission these nodes  &apos;, name: &apos;server_list&apos;, defaultValue: &apos;&apos;)
+
+           ]
+
+            )
+    ]
+    )
+ 
+    stage(&apos;Commission and Allocate Node&apos;) {
+      input message: &apos;&apos;&apos;Pre-requisuite:
+    1. RAID configuration to be performed by User and should be in place before initiating pipeline
+    2. Proper hostname and pool should be added to machines 
+    3. Check if ports are open from source maas server ip to target nodes BMC ( ILO / IDRAC / IPMI )  ip address UDP/623
+    4. MAAS server should have &quot;jq&quot; ( jquery installed on the system)
+    5. Master file &quot; /var/lib/jenkins/global_pipeline_parameters/master.properties&quot; should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.) 
+    &apos;&apos;&apos;
+   sh &quot;&quot;&quot;
+   echo &quot; maas_server_admin:  $maas_server_admin maas_server_ip: $maas_server_ip maas_admin: $maas_admin&quot;
+
+   ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip &apos;bash -s&apos; &lt;/var/lib/jenkins/maas_manual/node_allocate_maas_manual.sh &quot;$maas_admin&quot; &quot;$maas_server_ip&quot; &quot;&apos;$server_list&apos;&quot;
+    &quot;&quot;&quot;
+  }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

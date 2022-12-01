@@ -1,0 +1,133 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Prerequisite:&#13;
+1. Successful completion of 1.1_MAAS_AUTOMATION_NODE_ALLOCATION Pipeline or Nodes should be in Ready state&#13;
+2. User needs to make sure proper disk is selected for OS installation (boot disk) with proper storage layout on the nodes when the node is in ready state. &#13;
+3. User needs to verify if the node has correct PXE IP address attached  prior to OS installation.&#13;
+4. MAAS server should have "jq" ( jquery installed on the system)&#13;
+5. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.)&#13;
+6. For "server_list" variable you can use 3 options&#13;
+  i. You can get the list of servers in ready state from output of pipeline 1.1_MAAS_job_Manual_node_allocation &#13;
+  ii. Execute the following command on the maas server  &#13;
+     a.  #  api_key="`sudo maas apikey --username &lt;maas_login_user_name&gt;`" &#13;
+     b.  # sudo maas login &lt;maas_login_user_name&gt; http://&lt;maas_server_ip&gt;:5240/MAAS   $api_key &#13;
+     c.   # sudo maas &lt;maas_login_user_name&gt;  machines read | jq -r '.[] | .hostname + "," + .status_message + "," + .system_id'|  grep  -i "Ready\|Released"                          &#13;
+ iii. If you do not intend to pass the server list, make sure that the servers on which os needs to be installed are in Ready or Released Status using command mentioned in point number 6.ii.c.&#13;
+&#13;
+This pipeline will perform below tasks&#13;
+1. Capture the server_list of nodes  provided by user   OR If the server list is not provided by user check for nodes in Ready or released state &#13;
+2. Deploy the OS on these nodes&#13;
+3. List out the server on which the OS is deployed successfully&#13;
+4. List out the servers on which the OS deployment process is not completed or failed and require manual intervention</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_server_ip</name>
+          <description>Enter the IP address of the server on which MAAS application service is installed and running</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_server_ip</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_admin</name>
+          <description>Enter the admin user name  used for  MAAS application UI/CLI login</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_admin</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>os_codename</name>
+          <description>Enter the OS code name to be used to deploy the server bionic=ubuntu 18.04 and focal=ubuntu 20.04</description>
+          <choices>
+            <string>focal</string>
+            <string>bionic</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>server_list</name>
+          <description>In each new line enter the server information in ready state "hostname,status,system_id" Ex: hyd-mg-compute1,Ready,krsmdq
+hyd-mg-compute2,Ready,ghrjyk  . * Note : If the user want to deploy OS  all nodes in ready state  then the server list variable can be left as blank and system will identify the nodes in "Ready" state and deploy OS these nodes  </description>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsPrivateKey = '/var/lib/jenkins/.ssh/id_rsa'
+def os_name = 'ubuntu'
+def maas_server_admin ='root'
+import groovy.text.*
+node {
+  properties(
+    [
+        parameters(
+            [
+        //       string(description: 'Please enter the IP address of the host maas server application is deployed', name: 'maas_server_ip'),
+        //    text(description: 'In Each line Enter the server information to be onboarded in the format below hostname,domain,mac_address,power_admin,power_password,ipmi_ip_address', name: 'server_list', defaultValue: 'sp-dev-compute1,dev,48:df:37:04:41:37,hpadmin,hpinvent,10.246.182.135\nsp-dev-compute2,dev,48:df:37:04:43:69,hpadmin,hpinvent,10.246.182.136\nsp-dev-compute3,dev,48:df:37:04:40:1b,hpadmin,hpinvent,10.246.182.137'),
+        //    text(description: 'In Each line Enter the gateway of interface information in the forrmat below gateway_ip_address,interface_name', name: 'gateway_details', defaultValue: '10.103.155.1,br-mgmt\n10.103.156.1,br-storage\n10.103.154.1,br-tunnel\n10.103.157.1,storage-ext\n10.103.156.1,storage-int'),
+        //    string(description: 'Enter the default pool name for the machines to be used in MAAS', name: 'pool', defaultValue: 'dev'),
+        //     choice(description: 'Enter the OS code name to be used to deploy the server bionic=ubuntu 18.04 and focal=ubuntu 20.04', name: 'os_codename', choices: ['focal','bionic']),
+        //    string(description: 'Enter the OS name to be used to deploy the server', name: 'os_name', defaultValue: 'ubuntu'),
+        //   string(description: 'Enter the OS username to be used to ssh to  the MAAS server', name: 'maas_server_admin', defaultValue: 'root'),
+        //    string(description: 'Enter the OS username to be added on the deployed nod', name: 'username', defaultValue: 'nictest'),
+        //    password(description: 'Enter the password for the username created after deploying node', name: 'password'),
+        //    string(description: 'Enter the Ansible playbook  filename with complete path on the maas server (ex:/root/maaz-backup/netplan_update/netplan-apply.yml )  ', name: 'netplan_file', defaultValue: '/home/playbooks/netplan/netplan-apply.yml'),
+        //    string(description: 'Enter the Ansible host inventory  filename with complete path on the maas server (ex:/root/maaz-backup/netplan_update/hosts )  ', name: 'host_inventory', defaultValue: '/home/playbooks/netplan/hosts'),
+        //    string(description: 'Enter the bond name for which bond failover tests will be performed  ', name: 'bond_name', defaultValue: 'bond0')
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'maas_server_ip', description: 'Enter the IP address of the server on which MAAS application service is installed and running', multiSelectDelimiter: ' ', name: 'maas_server_ip', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'maas_admin', description: 'Enter the admin user name  used for  MAAS application UI/CLI login', multiSelectDelimiter: ' ', name: 'maas_admin', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+              choice(description: 'Enter the OS code name to be used to deploy the server bionic=ubuntu 18.04 and focal=ubuntu 20.04', name: 'os_codename', choices: ['focal','bionic']),
+              text(description: 'In each new line enter the server information in ready state "hostname,status,system_id" Ex: hyd-mg-compute1,Ready,krsmdq\nhyd-mg-compute2,Ready,ghrjyk  . * Note : If the user want to deploy OS  all nodes in ready state  then the server list variable can be left as blank and system will identify the nodes in "Ready" state and deploy OS these nodes  ', name: 'server_list', defaultValue: '')
+              
+             ]
+
+            )
+    ]
+    )
+    
+    stage('Verify the server list') {
+        
+      sh """
+      ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/server_list_check_os_installation.sh "$maas_server_ip" "$maas_admin"  "'$server_list'"
+       """
+         input message: '''Pre-requisuite:
+                        1. Successful completion of 1.1_MAAS_AUTOMATION_NODE_ALLOCATION Pipeline or Nodes should be in Ready state
+                        2. User verified proper disk is selected for OS installation (boot disk) on the nodes when the node is in ready state. If required  configuration to be performed by User through MAAS UI and should be in place before initiating pipeline.
+                        3. User verified that  the node has proper disk selected in storage layout for OS installation.
+                        4. USer verified that correct PXE IP is attached to the node as required.
+                        5. MAAS server should have "jq" ( jquery installed on the system)
+                        6. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.)
+                        7. Verify the server list provided above is correct for OS deployment
+                        '''
+   
+        
+    }
+    stage('Node OS deployment') {
+  
+     sh """
+      ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/os_install_only_maas_manual.sh "$maas_admin" "$maas_server_ip" "$os_name" "$os_codename" "'$server_list'"
+      """
+  }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

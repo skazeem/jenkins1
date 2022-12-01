@@ -1,0 +1,145 @@
+---
+dashboard_enabled: false
+generate_fsid: false
+fsid: 3162fc4a-94b8-4fcf-a63f-1661a7e8caeb
+
+monitor_address_block: "10.246.184.0/24"
+public_network: "10.246.184.0/24"
+cluster_network: "10.246.185.0/24"
+monitor_interface: "br-mgmt"
+osd_scenario: lvm
+osd_objectstore: bluestore
+ceph_stable_release: octopus
+ceph_origin: repository
+ceph_repository: community
+ceph_repository_type: cdn
+
+ceph_conf_overrides:
+  client:
+    rbd cache: True
+    rbd cache writethrough until flush: True
+  global:
+    debug asok: 0/0
+    debug auth: 0/0
+    debug bdev: 0/0
+    debug bluefs: 0/0
+    debug bluestore: 0/0
+    debug buffer: 0/0
+    debug civetweb: 0/0
+    debug client: 0/0
+    debug compressor: 0/0
+    debug context: 0/0
+    debug crush: 0/0
+    debug crypto: 0/0
+    debug dpdk: 0/0
+    debug eventtrace: 0/0
+    debug filer: 0/0
+    debug filestore: 0/0
+    debug finisher: 0/0
+    debug fuse: 0/0
+    debug heartbeatmap: 0/0
+    debug javaclient: 0/0
+    debug journal: 0/0
+    debug journaler: 0/0
+    debug kinetic: 0/0
+    debug kstore: 0/0
+    debug leveldb: 0/0
+    debug lockdep: 0/0
+    debug mds: 0/0
+    debug mds balancer: 0/0
+    debug mds locker: 0/0
+    debug mds log: 0/0
+    debug mds log expire: 0/0
+    debug mds migrator: 0/0
+    debug memdb: 0/0
+    debug mgr: 0/0
+    debug mgrc: 0/0
+    debug mon: 0/0
+    debug monc: 0/00
+    debug ms: 0/0
+    debug none: 0/0
+    debug objclass: 0/0
+    debug objectcacher: 0/0
+    debug objecter: 0/0
+    debug optracker: 0/0
+    debug osd: 0/0
+    debug paxos: 0/0
+    debug perfcounter: 0/0
+    debug rados: 0/0
+    debug rbd: 0/0
+    debug rbd mirror: 0/0
+    debug rbd replay: 0/0
+    debug refs: 0/0
+    debug reserver: 0/0
+    debug rgw: 0/0
+    debug rocksdb: 0/0
+    debug striper: 0/0
+    debug throttle: 0/0
+    debug timer: 0/0
+    debug tp: 0/0
+    debug xio: 0/0
+    max open files: 26234859
+    mon compact on trim: False
+    osd deep scrub interval: 137438953472
+    osd max scrubs: 16
+    osd objectstore: bluestore
+    osd pool default min size: 1
+    osd pool default size: 2
+    osd scrub load threshold: 0.01
+    osd scrub max interval: 137438953472
+    osd scrub min interval: 137438953472
+    perf: True
+    rbd readahead disable after bytes: 0
+    rbd readahead max bytes: 4194304
+    rocksdb perf: False
+    rocksdb collect extended stats: False
+    rocksdb collect memory stats: False
+    rocksdb collect compaction stats: False
+    throttler perf counter: False
+  mon:
+    mon allow pool delete: True
+    mon health preluminous compat: True
+    mon osd down out interval: 300
+    auth allow insecure global id reclaim: False
+  osd:
+    bluestore cache autotune: 0
+    bluestore cache kv ratio: 0.2
+    bluestore cache meta ratio: 0.8
+    bluestore cache size ssd: 8G
+    bluestore csum type: none
+    bluestore extent map shard max size: 200
+    bluestore extent map shard min size: 50
+    bluestore extent map shard target size: 100
+    bluestore sync submit transaction: False
+    bluefs buffered io: True
+    bluestore min alloc size: 65536
+    bluestore shard finishers: False
+    bluestore extent map shard max size: 200
+    bluestore extent map shard target size: 100
+    bluestore csum type: none
+    bluestore max bytes:  0
+    bluestore wal max bytes: 0
+    bluestore max ops: 0
+    bluestore wal max ops: 0
+    bluestore rocksdb options: compression=kNoCompression,max_write_buffer_number=128,min_write_buffer_number_to_merge=8,recycle_log_file_num=32,compaction_style=kCompactionStyleLevel,write_buffer_size=67108864,target_file_size_base=67108864,max_background_compactions=62,level0_file_num_compaction_trigger=16,level0_slowdown_writes_trigger=64,level0_stop_writes_trigger=128,num_levels=7,max_bytes_for_level_base=536870912,max_bytes_for_level_multiplier=8,compaction_threads=32,flusher_threads=32
+    osd map share max epochs: 100
+    osd max backfills: 5
+    osd memory target: 4294967296
+    osd op threads: 16
+    osd op num shards: 8
+    osd op num threads per shard: 1
+    osd min pg log entries: 50
+    osd max pg log entries: 50
+    osd pg log dups tracked: 50
+    osd pg log trim min: 50
+
+os_tuning_params:
+  - { name: kernel.pid_max, value: 4194303 }
+  - { name: fs.file-max, value: 26234859 }
+  - { name: vm.zone_reclaim_mode, value: 0 }
+  - { name: vm.swappiness, value: 1 }
+  - { name: vm.min_free_kbytes, value: 1000000 }
+  - { name: net.core.rmem_max, value: 268435456 }
+  - { name: net.core.wmem_max, value: 268435456 }
+  - { name: net.ipv4.tcp_rmem, value: 4096 87380 134217728 }
+  - { name: net.ipv4.tcp_wmem, value: 4096 65536 134217728 }

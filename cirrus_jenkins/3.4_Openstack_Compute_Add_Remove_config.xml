@@ -1,0 +1,285 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Prerequisite:&#13;
+       1. Host Being used for openstack should have all previous MAAS Pipelines executed&#13;
+       2. Master file should exists. " /var/lib/jenkins/global_pipeline_parameters/master.properties having populated defaults.&#13;
+&#13;
+This pipeline will perform below tasks:&#13;
+&#13;
+   1. If Add node is selected.&#13;
+      a. Updated the Inventory. &#13;
+      b. Check for duplicate entry.&#13;
+      c. Execute playbooks for Node setup/OpenStack setup and OVS creation.&#13;
+      d. Add node to pcs cluster. &#13;
+      e. Installing monitoring role.&#13;
+   2. If Add Removal is selected. &#13;
+      a. Stop services related to OpenStack &#13;
+      b. Remove node from pcs cluster.&#13;
+      c. Remove services and agent from DB.&#13;
+      d. Remove host OSA inventory &#13;
+      e. Remove host from YAML files. </description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>DeploymentNodeIp</name>
+          <description>This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>DeploymentNodeIp</defaultPropertyKey>
+          <multiSelectDelimiter>,</multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.StringParameterDefinition>
+          <name>Actionable_Node</name>
+          <description>Enter the list of Nodes seperated by Comma which needs to be added or removed</description>
+          <defaultValue>compute13,compute14</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>Action</name>
+          <description>Please select what action is needed, if new node need to be added select Node_Add and if existing node is to be deleted select Node_Remove</description>
+          <choices>
+            <string>Node_Add</string>
+            <string>Node_Remove</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsHome = '/var/lib/jenkins'
+def JenkinsOSHOME = "$JenkinsHome/openstack"
+def JnekinsPrivateKey = '/var/lib/jenkins/.ssh/id_rsa'
+def OsaCd = '/opt/openstack-ansible'
+def OsaWd = "$OsaCd/playbooks/"
+def OSetc = '/etc/openstack_deploy/'
+def UpdatedNodes = ''
+def ComputeNodes = ''
+//def ignore_common = 'true'
+//def Ignore_common = 'false'
+
+def get_ip(def hostname) {
+    def host_list = ""
+    def data = readFile(file: '/var/lib/jenkins/openstack/ip_hostname')
+    data = data.split('\n')
+    hosts = hostname.split(',')  
+    for ( def i = 0 ; i &lt; hosts.length ; i++ ) {
+        for ( def j = 0 ; j &lt; data.length ; j++ ){
+        if ( data[j].contains(hosts[i]) ) {
+        host_list = host_list + data[j] + ','
+        break;
+                }
+            }
+        }
+        host_list = host_list.substring(0,host_list.length() - 1)
+        return host_list 
+        //println host_list
+    }
+
+
+node {
+
+properties(
+        [
+            parameters(
+                [
+                extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'DeploymentNodeIp', description: 'This variable expects hostname or IP of the deployment node. This the node where OSA is installed for OpenStack deployment and other prerequisites like password-less connectivity from deployment node to other storage nodes is achieved.', multiSelectDelimiter: ',', name: 'DeploymentNodeIp', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+                string(description:'Enter the list of Nodes seperated by Comma which needs to be added or removed', name: 'Actionable_Node', defaultValue: 'compute13,compute14'),
+                choice(name: 'Action', choices: ['Node_Add','Node_Remove'], description: 'Please select what action is needed, if new node need to be added select Node_Add and if existing node is to be deleted select Node_Remove'),
+                //choice(name: 'Ignore_common', choices: ['True','false'], description: 'Please select true if we want run the pipeline even if node exists in current inventory,else select False if pipeline should terminate while repoting existing node'),
+
+                ]
+                )
+        ]
+        )
+    
+stage('Precheck'){
+    
+    sh "mkdir -p $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/"
+    sh """
+    if ( ssh  -q -o StrictHostKeyChecking=no -i $JnekinsPrivateKey root@$DeploymentNodeIp exit ); then echo SSH OK ; else echo SSH to Deployment node failed ; exit 201 ; fi
+    
+    """
+    def output = sh (script: "ssh -q  -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp '[ -f /etc/openstack_deploy/openstack_user_config.yml ] &amp;&amp; echo OSA config exist || echo OSA config yaml does not exists on given deployment node'", returnStdout: true)
+    println "$output"
+    if (output.contains('does not')) {
+    sh " echo echo OSA config yaml does not exists on given deployment node; exit 225"
+    }
+}
+
+stage('Node addition'){
+if (action == 'Node_Add') {
+ sh """
+ $JenkinsOSHOME/fetch_management_ip.sh
+ scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp:$OSetc/openstack_user_config.yml $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_existing 
+ """
+ 
+ readdata = readYaml file: "/var/lib/jenkins/openstack/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_existing"
+ 
+ existing_nodes =  "${readdata.compute_hosts}"
+ def  node = []
+ ranges = existing_nodes.split(',');
+           ranges.eachWithIndex { item, index -&gt;
+            
+             value = "${item.split(':')[0].replace("[","").replaceAll("\\s","")}"
+             node +=value   
+           }  
+           
+def new_compute = []
+//def Actionable_Node = "compute13,compute14"
+//Check for duplication
+range = Actionable_Node.split(',');
+          range.eachWithIndex { item, index -&gt;
+          new_compute += item
+          }
+def netplan_entry = []
+def data = readFile(file: '/var/lib/jenkins/openstack/ip_hostname')
+data = data.split('\n');
+       data.eachWithIndex { item, index -&gt;
+       value = item.split(':')[0]
+       netplan_entry +=value
+       }
+assert netplan_entry.containsAll(new_compute) : "Few items in new_compute does not exists in netplan role Please check and add entry in netplan role file"
+       
+println "Existing nodes from current openstack_user_config.yml $node"
+println "New Nodes provided by jenkins input $new_compute"
+//println (node.getClass())
+//println (new_compute.getClass())
+
+def commonItems = new_compute.intersect(node)
+
+if ("$commonItems" != '[]' ) {
+println  "Duplicate value(s) found $commonItems"
+println "Please check new node(s) are already part of existing setup"
+
+input message: "Please select proceed to continue"
+}
+
+ UpdatedNodes =  node + new_compute
+ UpdatedNodes.unique()
+ UpdatedNodes = UpdatedNodes.join(",")
+ println " Updated  list of computes $UpdatedNodes"
+ 
+ ComputeNodes = get_ip(UpdatedNodes)
+ //println "$ComputeNodes"
+ String abc1 = ""
+ nameippair = ComputeNodes.split(',')
+ for (def a  in nameippair )
+ {
+   subArray = a.split(':')
+   key = subArray[0]
+   value = subArray[1]
+   abc1 = abc1 + key + ":\n" + "  ip: " + value + "\n" 
+        
+    }
+ println "$abc1"
+ readdata.compute_hosts = "$abc1"
+ readdata."masakari-monitor_hosts" = "$abc1"
+ //println readdata.compute_hosts
+ 
+ writeYaml file: "$JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated", data: readdata, overwrite: true
+ 
+ sh """
+      sed -i  's/|//g'  $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated
+      ssh -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd $OSetc ; cp openstack_user_config.yml openstack_user_config.yml_`date +"%Y_%m_%d_%I_%M_%p"` &amp;&amp; cp openstack_inventory.json openstack_inventory.json`date +"%Y_%m_%d_%I_%M_%p"` '
+      scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated root@$DeploymentNodeIp:$OSetc/openstack_user_config.yml
+    """
+    
+ println "executing Node addition playbooks."
+ sh """
+ ssh -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd $OsaWd &amp;&amp; openstack-ansible setup-hosts.yml --limit localhost,$Actionable_Node &amp;&amp;  ansible nova_all -m setup -a \"filter=ansible_local gather_subset=!all\" &amp;&amp; openstack-ansible os-masakari-install.yml &amp;&amp; openstack-ansible setup-openstack.yml  --limit localhost,$Actionable_Node -e venv_rebuild=yes &amp;&amp;  openstack-ansible os-nova-install.yml --tags nova-key --limit nova_compute &amp;&amp; openstack-ansible monitoring_install.yml -l $Actionable_Node &amp;&amp; openstack-ansible monitoring_start.yml -l $Actionable_Node &amp;&amp; openstack-ansible ovs-setup.yml -l $Actionable_Node'
+ """
+ }
+}
+
+stage('Node_Removal'){
+if (action == 'Node_Remove') {
+
+sh """
+   ssh  -o StrictHostKeyChecking=no -i  $JnekinsPrivateKey root@$DeploymentNodeIp 'if [ -d /opt/openstack-ansible-ops ]; then echo "Ops repo exists" ; else git clone https://opendev.org/openstack/openstack-ansible-ops /opt/openstack-ansible-ops ; fi' 
+   ssh  -o StrictHostKeyChecking=no -i  $JnekinsPrivateKey root@$DeploymentNodeIp 'cd /opt/openstack-ansible-ops/ansible_tools/playbooks &amp;&amp; sed  s,grep,"grep -w",g remove_compute_node.yml  &gt; remove_compute.yml'
+"""
+
+items = Actionable_Node.split(',');
+          items.eachWithIndex { item, index -&gt;
+          compute = item
+          
+          sh """
+          ssh  -q -o StrictHostKeyChecking=no -i $JnekinsPrivateKey root@$DeploymentNodeIp 'if (ssh root@$compute systemctl stop neutron-openvswitch-agent nova-compute neutron-l3-agent neutron-metadata-agent ); then echo nova and neutron service stopped on $compute  ; else echo service stopped failed ; echo Make sure this node  is erased if it can come online again ; fi'
+          ssh  -q -o StrictHostKeyChecking=no -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd /opt/openstack-ansible-ops/ansible_tools/playbooks &amp;&amp; openstack-ansible remove_compute.yml -e host_to_be_removed=$compute'
+          """
+          }
+//get the existing openstack_user_config file
+sh """
+scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp:$OSetc/openstack_user_config.yml $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_existing
+"""  
+readdata = readYaml file: "/var/lib/jenkins/openstack/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_existing"
+
+existing_nodes =  "${readdata.compute_hosts}"
+ def  node = []
+ ranges = existing_nodes.split(',');
+    ranges.eachWithIndex { item, index -&gt;
+    value = "${item.split(':')[0].replace("[","").replaceAll("\\s","")}"
+    node +=value   
+    } 
+    
+def new_compute = []
+//println Actionable_Node
+
+rangess = Actionable_Node.split(',');
+          rangess.eachWithIndex { item, index -&gt;
+          new_compute += item
+          }
+
+UpdatedNodes = node.minus(new_compute)
+
+UpdatedNodes = UpdatedNodes.join(",")
+
+ComputeNodes = get_ip(UpdatedNodes)
+
+ String abc1 = ""
+ nameippair = ComputeNodes.split(',')
+println nameippair
+ for (def a  in nameippair )
+ {
+   subArray = a.split(':')
+   key = subArray[0]
+   value = subArray[1]
+   abc1 = abc1 + key + ":\n" + "  ip: " + value + "\n" 
+        
+    }
+ println "$abc1"
+ readdata.compute_hosts = "$abc1"
+ readdata."masakari-monitor_hosts" = "$abc1"
+ //println readdata.compute_hosts
+ 
+ writeYaml file: "$JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated", data: readdata, overwrite: true
+ 
+ sh """
+      sed -i  's/|//g'  $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated
+      ssh -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd $OSetc ; cp openstack_user_config.yml openstack_user_config.yml_`date +"%Y_%m_%d_%I_%M_%p"` &amp;&amp; cp openstack_inventory.json openstack_inventory.json`date +"%Y_%m_%d_%I_%M_%p"` '
+      scp -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey $JenkinsOSHOME/Openstack_Compute_Add_remove/$BUILD_NUMBER/openstack_user_config.yml_updated root@$DeploymentNodeIp:$OSetc/openstack_user_config.yml
+      ssh -o StrictHostKeyChecking=no  -i $JnekinsPrivateKey root@$DeploymentNodeIp 'cd $OsaWd &amp;&amp; openstack-ansible os-masakari-install.yml'
+    """
+    
+}
+
+}
+}
+</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

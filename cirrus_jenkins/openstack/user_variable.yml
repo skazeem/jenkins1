@@ -1,0 +1,143 @@
+---
+proxy_env_url: "http://10-246-183-0--25.maas-internal:8000/"
+no_proxy_env: "localhost,127.0.0.1,{{ internal_lb_vip_address }},{{ external_lb_vip_address }},{% for host in groups['all_containers'] %}{{ hostvars[host]['container_address'] }}{% if not loop.last %},{% endif %}{% endfor %}"
+global_environment_variables:
+  HTTP_PROXY: "{{ proxy_env_url }}"
+  HTTPS_PROXY: "{{ proxy_env_url }}"
+  NO_PROXY: "{{ no_proxy_env }}"
+  http_proxy: "{{ proxy_env_url }}"
+  https_proxy: "{{ proxy_env_url }}"
+  no_proxy: "{{ no_proxy_env }}"
+  #
+## (2) This is applied only during deployment, nothing is left after deployment is complete:
+deployment_environment_variables:
+  http_proxy: "{{ proxy_env_url }}"
+  https_proxy: "{{ proxy_env_url }}"
+  no_proxy: "localhost,127.0.0.1,{{ internal_lb_vip_address }},{{ external_lb_vip_address }},{% for host in groups['keystone_all'] %}{{ hostvars[host]['container_address'] }}{% if not loop.last %},{% endif %}{% endfor %}"
+
+# Because we have three haproxy nodes, we need
+# to one active LB IP, and we use keepalived for that.
+## Load Balancer Configuration (haproxy/keepalived)
+haproxy_keepalived_external_vip_cidr: "{{external_lb_vip_address}}/32"
+haproxy_keepalived_internal_vip_cidr: "{{internal_lb_vip_address}}/32"
+haproxy_keepalived_external_interface: br-mgmt
+haproxy_keepalived_internal_interface: br-mgmt
+cinder_ceph_client: cinder
+glance_ceph_client: glance
+glance_default_store: rbd
+glance_rbd_store_pool: prod-images
+nova_libvirt_images_rbd_pool: prod-vms
+cinder_backends:
+  RBD:
+    volume_driver: cinder.volume.drivers.rbd.RBDDriver
+    rbd_pool: prod-volumes
+    rbd_ceph_conf: /etc/ceph/ceph.conf
+    rbd_store_chunk_size: 8
+    volume_backend_name: rbddriver
+    rbd_user: "{{ cinder_ceph_client }}"
+    rbd_secret_uuid: "{{ cinder_ceph_client_uuid }}"
+    report_discard_supported: true
+lxc_cache_prep_timeout: 320000
+# Use the following NTP servers.
+security_ntp_servers:
+  - ntpserver
+
+haproxy_use_keepalived: True
+haproxy_ssl: False
+openstack_service_publicuri_proto: "http"
+
+keepalived_ping_address: "10.246.184.1"
+
+# Ensure the openvswitch kernel module is loaded
+openstack_host_specific_kernel_modules:
+  - name: "openvswitch"
+    pattern: "CONFIG_OPENVSWITCH"
+    group: "network_hosts"
+
+# Enable or disable L2 Population.
+neutron_l2_population: "True"
+
+### neutron specific config
+neutron_plugin_type: ml2.ovs.dvr
+
+neutron_ml2_drivers_type: "flat,vxlan"
+
+neutron_provider_networks:
+  network_flat_networks: "provider"
+  network_types: "vxlan"
+  network_vxlan_ranges: "1:1000"
+  network_mappings: "provider:br-provider"
+  network_interface: vlan-provider
+
+## Nova Console Type
+nova_console_type: novnc
+
+# Nova Scheduler
+nova_cpu_allocation_ratio: 4.0
+nova_disk_allocation_ratio: 1.0
+nova_max_instances_per_host: 50
+nova_max_io_ops_per_host: 10
+nova_ram_allocation_ratio: 1.0
+nova_ram_weight_multiplier: 5.0
+nova_reserved_host_disk_mb: 2048
+#nova_virt_type: kvm
+
+#RabbitMQ variable, needed for local package installation as 
+#proxy was not working for repository 
+#rabbitmq_package_path: /root/rabbitmq-server_3.8.0-1_all.deb
+#rabbitmq_install_method: file
+#rabbitmq_erlang_version_spec: "1:22.0*"
+
+horizon_site_name: 'NIC Cloud Infra Dashboard'
+
+horizon_custom_themes:
+  custom_theme:
+    theme_name: "niccloud"
+    theme_label: "niccloud"
+    theme_path: "themes/niccloud"
+    theme_src_archive: "/etc/openstack_deploy/horizon/niccloud.tar.gz"
+
+_horizon_available_themes:
+  default:
+    theme_name: "default"
+    theme_label: "Default"
+    theme_path: "themes/default"
+  material:
+    theme_name: "material"
+    theme_label: "Material"
+    theme_path: "themes/material"
+
+horizon_default_theme: "niccloud"
+
+
+
+# Haproxy Configs
+
+haproxy_client_timeout: "300s"
+haproxy_server_timeout: "300s"
+debug: False
+install_method: source
+ceph_stable_release: pacific
+ceph_mons:
+
+haproxy_extra_services:
+  - service:
+      haproxy_service_name: grafana
+      haproxy_ssl: False
+      haproxy_backend_nodes: "{{ groups['grafana'] | default([]) }}"
+      haproxy_port: 8443  # This is set using the "grafana_port" variable
+      haproxy_balance_type: tcp
+
+  - service:
+      haproxy_service_name: prometheus
+      haproxy_ssl: False
+      haproxy_backend_nodes: "{{ groups['prometheus'] | default([]) }}"
+      haproxy_port: 9090  # This is set using the "prometheus_port" variable
+      haproxy_balance_type: tcp
+
+  - service:
+      haproxy_service_name: openstack-exporter
+      haproxy_ssl: False
+      haproxy_backend_nodes: "{{ groups['openstack-exporter'] | default([]) }}"
+      haproxy_port: 9180  # This is set using the "prometheus_port" variable
+      haproxy_balance_type: tcp

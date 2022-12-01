@@ -1,0 +1,144 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?><flow-definition plugin="workflow-job@1145.v7f2433caa07f">
+  <actions>
+    <org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction plugin="workflow-multibranch@711.vdfef37cda_816">
+      <jobPropertyDescriptors>
+        <string>hudson.model.ParametersDefinitionProperty</string>
+      </jobPropertyDescriptors>
+    </org.jenkinsci.plugins.workflow.multibranch.JobPropertyTrackerAction>
+  </actions>
+  <description>Pre-requisuite:&#13;
+      1. Job 1.3_MAAS_AUTOMATION_POST_OS_DEPLOY_CONFIG should have been completed successfully prior to the execution of this script&#13;
+      2. Provide gateway detais with respective interface name to perform bond failover testing.&#13;
+      3. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.) &#13;
+&#13;
+&#13;
+&#13;
+This Job Will perform below action&#13;
+&#13;
+1. Enable LLDP privilage flag for interfaces which are part of bond&#13;
+2. Perform a test to verify if DNS is able to resolve queries&#13;
+3. Perfrom a test to check if NTP on the node is in sync&#13;
+4. Perform a Interface failover test for bonds present on the node.&#13;
+5. Check if the Aggregator ID for a bond and it's slave interface is same&#13;
+6. Get the max speed of bond interface&#13;
+7. Check if correct default gateway is configured</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>maas_server_ip</name>
+          <description>Enter the IP address of the server on which MAAS application service is installed and running</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>maas_server_ip</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>gateway_details_openstack</name>
+          <description>Enter the list of gateways with preferred interfaces  to test the connectivity from the openstack controller and compute   nodes ex:  "10.103.155.1:br-mgmt,10.103.154.1:br-tunnel,10.103.157.1:br-storage,10.103.156.1:storage-int"</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>gateway_details_openstack</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition plugin="extended-choice-parameter@346.vd87693c5a_86c">
+          <name>gateway_details_storage</name>
+          <description>Enter the list of gateways with preferred interfaces  to test the connectivity from the storage controller and osd nodes ex:  "10.103.155.1:br-mgmt,10.103.154.1:br-tunnel,10.103.157.1:storage-ext,10.103.156.1:storage-int"</description>
+          <quoteValue>false</quoteValue>
+          <saveJSONParameterToFile>false</saveJSONParameterToFile>
+          <visibleItemCount>1</visibleItemCount>
+          <type>PT_TEXTBOX</type>
+          <defaultPropertyFile>/var/lib/jenkins/global_pipeline_parameters/master.properties</defaultPropertyFile>
+          <defaultPropertyKey>gateway_details_storage</defaultPropertyKey>
+          <multiSelectDelimiter> </multiSelectDelimiter>
+        </com.cwctravel.hudson.plugins.extended__choice__parameter.ExtendedChoiceParameterDefinition>
+        <hudson.model.TextParameterDefinition>
+          <name>server_list</name>
+          <description>In Each line Enter the server information on which tests needs to be performed "hostname,status,system_id", you can also use  the server list provided at the end  in  console output of previous job Pipeline 1.3_MAAS_AUTOMATION_POST_OS_DEPLOY_CONFIG </description>
+          <trim>false</trim>
+        </hudson.model.TextParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>bond_speed</name>
+          <description> Select the expected throughput  of bonds ex: 50Gbps or 10Gbps</description>
+          <choices>
+            <string>50Gbps</string>
+            <string>25Gbps</string>
+            <string>20Gbps</string>
+            <string>10Gbps</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2660.vb_c0412dc4e6d">
+    <script>def JenkinsPrivateKey = '/var/lib/jenkins/.ssh/id_rsa'
+def maas_server_admin ='root'
+import groovy.text.*
+node {
+  properties(
+    [
+        parameters(
+            [
+        //    string(description: 'Please enter the IP address of the host maas server application is deployed', name: 'maas_server_ip'),
+        //    text(description: 'In Each line Enter the server information to be onboarded in the format below hostname,domain,mac_address,power_admin,power_password,ipmi_ip_address', name: 'server_list', defaultValue: 'sp-dev-compute1,dev,48:df:37:04:41:37,hpadmin,hpinvent,10.246.182.135\nsp-dev-compute2,dev,48:df:37:04:43:69,hpadmin,hpinvent,10.246.182.136\nsp-dev-compute3,dev,48:df:37:04:40:1b,hpadmin,hpinvent,10.246.182.137'),
+        //    text(description: 'In Each line Enter the gateway of interface information in the forrmat below gateway_ip_address,interface_name', name: 'gateway_details', defaultValue: '10.103.155.1,br-mgmt\n10.103.154.1,br-tunnel\n10.103.157.1,storage-ext\n10.103.156.1,storage-int'),
+        //    string(description: 'Enter the maas application admin name for the machines', name: 'maas_admin', defaultValue: 'maas'),
+        //    string(description: 'Enter the default pool name for the machines to be used in MAAS', name: 'pool', defaultValue: 'dev'),
+        //    choice(description: 'Enter the OS name to be used to deploy the server bionic=ubuntu 18.04 and focal=ubuntu 20.04', name: 'os_codename', choices: ['focal','bionic']),
+        //    string(description: 'Enter the OS name to be used to deploy the server', name: 'os_name', defaultValue: 'ubuntu'),
+        //    string(description: 'Enter the OS username to be used to ssh to  the MAAS server', name: 'maas_server_admin', defaultValue: 'root'),
+        //    string(description: 'Enter the OS username to be added on the deployed nod', name: 'username', defaultValue: 'nictest'),
+        //    password(description: 'Enter the password for the username created after deploying node', name: 'password'),
+        //    string(description: 'Enter the Ansible playbook  filename with complete path on the maas server (ex:/root/maaz-backup/netplan_update/netplan-apply.yml )  ', name: 'netplan_file', defaultValue: '/home/playbooks/netplan/netplan-apply.yml'),
+        //    string(description: 'Enter the Ansible host inventory  filename with complete path on the maas server (ex:/root/maaz-backup/netplan_update/hosts )  ', name: 'host_inventory', defaultValue: '/home/playbooks/netplan/hosts'),
+            extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'maas_server_ip', description: 'Enter the IP address of the server on which MAAS application service is installed and running', multiSelectDelimiter: ' ', name: 'maas_server_ip', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+            extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'gateway_details_openstack', description: 'Enter the list of gateways with preferred interfaces  to test the connectivity from the openstack controller and compute   nodes ex:  "10.103.155.1:br-mgmt,10.103.154.1:br-tunnel,10.103.157.1:br-storage,10.103.156.1:storage-int"', multiSelectDelimiter: ' ', name: 'gateway_details_openstack', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+            extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'gateway_details_storage', description: 'Enter the list of gateways with preferred interfaces  to test the connectivity from the storage controller and osd nodes ex:  "10.103.155.1:br-mgmt,10.103.154.1:br-tunnel,10.103.157.1:storage-ext,10.103.156.1:storage-int"', multiSelectDelimiter: ' ', name: 'gateway_details_storage', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1),
+            text(description: 'In Each line Enter the server information on which tests needs to be performed "hostname,status,system_id", you can also use  the server list provided at the end  in  console output of previous job Pipeline 1.3_MAAS_AUTOMATION_POST_OS_DEPLOY_CONFIG ' , name: 'server_list', defaultValue: ''),
+            choice(description:' Select the expected throughput  of bonds ex: 50Gbps or 10Gbps', name: 'bond_speed', choices: ['50Gbps','25Gbps','20Gbps','10Gbps']),
+
+         //   extendedChoice(defaultPropertyFile: '/var/lib/jenkins/global_pipeline_parameters/master.properties', defaultPropertyKey: 'bond_speed', description: 'Enter the list of bonds available on the nodes on which the interface failwover for bond needs to be tested', multiSelectDelimiter: ',', name: 'bond_name', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_TEXTBOX', visibleItemCount: 1)
+             ]
+
+            )
+    ]
+    )
+          stage('Verify the server list') {
+        
+      sh """
+      ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/server_list_post_network_test.sh "'$server_list'"
+       """
+      input message: '''Pre-requisuite:
+      1. Job 1.3_MAAS_AUTOMATION_POST_OS_DEPLOY_CONFIG should have been completed successfully prior to the execution of this script
+      2. Provide gateway detais with respective interface name to perform bond failover testing.
+      3. Master file " /var/lib/jenkins/global_pipeline_parameters/master.properties" should be present on the jenkins node, having populated default Parameter values.(This will be on git once we have access to git from Jenkins box.)      '''
+      
+  }
+    stage('Post OS deployment check') {
+       
+  sh """
+    set +x
+   ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip /var/lib/jenkins/maas_manual/networking_test.sh  "$maas_server_admin" "'$gateway_details_storage'" "'$server_list'" "'$gateway_details_openstack'" "$bond_speed"
+   """
+    }
+    stage('Post OS deployment check report generation') {
+        
+  sh """
+    set +x
+    ssh -i $JenkinsPrivateKey $maas_server_admin@$maas_server_ip 'bash -s' &lt;/var/lib/jenkins/maas_manual/post_complete_check.sh
+    """
+     }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

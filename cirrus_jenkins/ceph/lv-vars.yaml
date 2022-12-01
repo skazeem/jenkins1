@@ -1,0 +1,25 @@
+---
+nvme_device: {}
+hdd_devices: []
+
+#journal_size: {}
+
+nvme_device_lvs:
+  - lv_name: "ceph-bucket-index-1"
+    size: 100%FREE
+    journal_name: "ceph-journal-bucket-index-1-{{ nvme_device_basename }}"
+
+wall_db_size: 50000
+
+logfile_path: {}
+
+hdd_lv_size: 100%FREE
+
+nvme_device_basename: "{{ nvme_device.split('/')[-1] }}"
+
+nvme_vg_name: "ceph-nvme-vg-{{ nvme_device_basename }}"
+
+hdd_vg_prefix: "ceph-ssd-vg"
+hdd_lv_prefix: "ceph-ssd-lv"
+hdd_journal_prefix: "ceph-journal"
+crush_device_class: "ssd"
