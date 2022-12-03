@@ -1,1 +1,1 @@
-this is testing file for trigger
+git 'https://github.com/skazeem/jenkins1.git'
