@@ -1,4 +1,4 @@
-node{
+node {
     properties(
         [
             parameters(
@@ -6,14 +6,21 @@ node{
                 )
             ]
         )
-}
-pipeline {
-    agent { label 'master' }
-    stages {
-        stage('build') {
-            steps {
-                echo "Hello World!"
-            }
+    def app
+    stage ('clone repo'){
+        checkout scm
+    }
+    stage ('build image'){
+        app = docker.build("localhost:5000/jenkins")
+    }
+    stage ('test image'){
+        app.inside{
+            sh 'echo "test"'
         }
+    }    
+    stage ('push image'){
+    docker.withRegistry('https://registry.localhost:5000'){
+        app.push("latest")
+    }
     }
 }
