@@ -1,3 +1,4 @@
+def JenkinsHome = '/var/jenkins_home/workspace/Jenkins_Deployment'
 node {
     properties(
         [
@@ -7,6 +8,13 @@ node {
             ]
         )
     def app
+    
+    stage('docker file'){
+            steps{
+                sh " scp -r root@192.168.100.26:/tmp/jenkins1/cirrus_jenkins $JenkinsHome "
+            }
+            
+      
     stage ('clone repo'){
         checkout scm
     }
