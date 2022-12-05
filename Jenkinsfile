@@ -12,6 +12,7 @@ node {
             steps{
                 sh " scp -r root@192.168.100.26:/tmp/jenkins1/cirrus_jenkins $JenkinsHome "
             }  
+    }
     stage ('clone repo'){
         checkout scm
     }
