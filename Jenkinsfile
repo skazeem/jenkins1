@@ -3,7 +3,7 @@ pipeline {
     stages {
         stage('build image') {
             steps {
-                 sh """docker build -f Dockerfile -t demoimage ."""
+                 sh """ docker build -t demoimage ."""
             }
         }
      }
